@@ -35,13 +35,32 @@ Servicios orquestados en `docker-compose.yml`:
 
 2. Ajusta puertos/credenciales según necesidad.
 
-## Arranque (comando único)
+## Arranque
+
+Levanta todos los servicios y fuerza el build de las imágenes locales:
 
 ```bash
 docker compose up --build
 ```
 
-Esto levantará toda la plataforma con los seis servicios definidos.
+## Verificación rápida
+
+Con `docker compose up --build` en ejecución:
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8080`
+- Consola de ActiveMQ: `http://localhost:8161/admin` (usuario/clave por defecto: `admin`/`admin`)
+
+## Variables de entorno relevantes (Spring)
+
+En `docker-compose.yml` se inyectan las propiedades de Spring vía variables estándar:
+
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `SPRING_ACTIVEMQ_BROKER_URL`
+- `SPRING_ACTIVEMQ_USER`
+- `SPRING_ACTIVEMQ_PASSWORD`
 
 ## Simulator
 

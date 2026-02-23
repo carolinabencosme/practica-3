@@ -9,6 +9,12 @@ services:
     environment:
       ACTIVEMQ_ADMIN_LOGIN: ${ACTIVEMQ_ADMIN_USER:-admin}
       ACTIVEMQ_ADMIN_PASSWORD: ${ACTIVEMQ_ADMIN_PASSWORD:-admin}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8161 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   postgres:
     image: postgres:16-alpine
@@ -22,6 +28,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   backend:
     build:
@@ -30,18 +42,20 @@ services:
     container_name: backend
     restart: unless-stopped
     depends_on:
-      - activemq
-      - postgres
+      activemq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     environment:
-      SERVER_PORT: ${BACKEND_PORT:-8080}
+      SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-telemetry}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-telemetry}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-telemetry}
-      JMS_BROKER_URL: tcp://activemq:61616
-      JMS_BROKER_USER: ${ACTIVEMQ_ADMIN_USER:-admin}
-      JMS_BROKER_PASSWORD: ${ACTIVEMQ_ADMIN_PASSWORD:-admin}
+      SPRING_ACTIVEMQ_BROKER_URL: tcp://activemq:61616
+      SPRING_ACTIVEMQ_USER: ${ACTIVEMQ_ADMIN_USER:-admin}
+      SPRING_ACTIVEMQ_PASSWORD: ${ACTIVEMQ_ADMIN_PASSWORD:-admin}
 
   simulator-1:
     build:
@@ -50,7 +64,8 @@ services:
     container_name: simulator-1
     restart: unless-stopped
     depends_on:
-      - activemq
+      activemq:
+        condition: service_healthy
     environment:
       DEVICE_ID: simulator-1
       BROKER_URL: tcp://activemq:61616
@@ -66,7 +81,8 @@ services:
     container_name: simulator-2
     restart: unless-stopped
     depends_on:
-      - activemq
+      activemq:
+        condition: service_healthy
     environment:
       DEVICE_ID: simulator-2
       BROKER_URL: tcp://activemq:61616
@@ -82,13 +98,10 @@ services:
     container_name: frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    environment:
-      FRONTEND_PORT: ${FRONTEND_PORT:-3000}
-      BACKEND_BASE_URL: http://backend:${BACKEND_PORT:-8080}
-      WEBSOCKET_URL: ws://backend:${BACKEND_PORT:-8080}/ws
+      - "${FRONTEND_PORT:-3000}:80"
 
 volumes:
   postgres_data:
