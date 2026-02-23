@@ -1,5 +1,11 @@
+FROM maven:3.9.9-eclipse-temurin-21-alpine AS build
+WORKDIR /workspace
+COPY pom.xml .
+COPY src src
+RUN mvn -q -DskipTests package
+
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
-
-CMD ["sh", "-c", "echo 'Backend Spring Boot placeholder: añade aquí tu jar y configuración JMS/WebSocket.' && tail -f /dev/null"]
+COPY --from=build /workspace/target/backend-0.0.1-SNAPSHOT.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
