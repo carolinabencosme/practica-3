@@ -22,7 +22,7 @@ public class SensorReadingService {
         return repository.findTop50ByOrderByReceivedAtDesc();
     }
 
-    public List<SensorReading> getByDevice(String deviceId) {
+    public List<SensorReading> getByDevice(Integer deviceId) {
         return repository.findTop50ByDeviceIdOrderByReceivedAtDesc(deviceId);
     }
 }

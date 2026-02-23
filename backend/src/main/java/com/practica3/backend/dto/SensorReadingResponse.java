@@ -6,7 +6,7 @@ import java.time.Instant;
 public record SensorReadingResponse(
         Long id,
         Instant generatedAt,
-        String deviceId,
+        Integer deviceId,
         Double temperature,
         Double humidity,
         Instant receivedAt

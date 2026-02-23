@@ -19,8 +19,8 @@ public class SensorReading {
     @Column(nullable = false)
     private Instant generatedAt;
 
-    @Column(nullable = false, length = 128)
-    private String deviceId;
+    @Column(nullable = false)
+    private Integer deviceId;
 
     @Column(nullable = false)
     private Double temperature;
@@ -47,11 +47,11 @@ public class SensorReading {
         this.generatedAt = generatedAt;
     }
 
-    public String getDeviceId() {
+    public Integer getDeviceId() {
         return deviceId;
     }
 
-    public void setDeviceId(String deviceId) {
+    public void setDeviceId(Integer deviceId) {
         this.deviceId = deviceId;
     }
 

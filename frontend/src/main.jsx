@@ -20,13 +20,14 @@ const restBase = import.meta.env.VITE_BACKEND_BASE_URL || '';
 const wsEndpoint = import.meta.env.VITE_WEBSOCKET_URL || '/ws';
 
 function toDeviceId(reading = {}) {
-  return (
-    reading.deviceId ||
-    reading.idDispositivo ||
-    reading.IdDispositivo ||
-    reading.deviceID ||
-    'desconocido'
-  );
+  const raw =
+    reading.deviceId ??
+    reading.idDispositivo ??
+    reading.IdDispositivo ??
+    reading.deviceID;
+
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : null;
 }
 
 function toTimestamp(reading = {}) {
@@ -46,8 +47,10 @@ function toNumber(value) {
 }
 
 function normalizeReading(raw = {}) {
+  const deviceId = toDeviceId(raw);
+
   return {
-    deviceId: toDeviceId(raw),
+    deviceId,
     timestamp: toTimestamp(raw),
     temperatura: toNumber(raw.temperatura ?? raw.temperature),
     humedad: toNumber(raw.humedad ?? raw.humidity)
@@ -55,6 +58,10 @@ function normalizeReading(raw = {}) {
 }
 
 function addReading(state, reading) {
+  if (reading.deviceId == null) {
+    return state;
+  }
+
   const current = state[reading.deviceId] || [];
   const updated = [...current, reading].slice(-MAX_POINTS);
   return {
