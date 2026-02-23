@@ -1,5 +1,11 @@
+FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
+
+WORKDIR /build
+COPY pom.xml ./
+COPY src ./src
+RUN mvn -B -DskipTests package
+
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
-
-CMD ["sh", "-c", "echo \"Simulator placeholder (${SIMULATOR_ID:-simulator}) publicando a ${JMS_BROKER_URL:-tcp://activemq:61616}.\" && tail -f /dev/null"]
+COPY --from=builder /build/target/simulator.jar /app/simulator.jar
+CMD ["java", "-jar", "/app/simulator.jar"]
