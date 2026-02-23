@@ -1,0 +1,56 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #111827;
+  background: #f3f4f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+header h1 {
+  margin-bottom: 0.25rem;
+}
+
+header p {
+  margin-top: 0;
+  color: #4b5563;
+}
+
+.status-panel,
+.device-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.status-panel ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.error {
+  color: #b91c1c;
+  margin-top: 0.75rem;
+}
+
+.chart-block {
+  width: 100%;
+  margin-bottom: 1.25rem;
+}
+
+.chart-block h4 {
+  margin-bottom: 0.5rem;
+}
