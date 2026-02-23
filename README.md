@@ -42,3 +42,18 @@ docker compose up --build
 ```
 
 Esto levantará toda la plataforma con los seis servicios definidos.
+
+## Simulator
+
+`simulator/` contiene una app Java que publica telemetría JMS/OpenWire al destino `notificacion_sensores`.
+
+Variables de entorno soportadas:
+
+- `DEVICE_ID`
+- `BROKER_URL`
+- `BROKER_USER`
+- `BROKER_PASSWORD`
+- `DESTINATION` (default: `notificacion_sensores`)
+- `PUBLISH_INTERVAL_SECONDS`
+
+Cada publicación incluye JSON con los campos `fechaGeneración` (`DD/MM/YYYY HH:mm:ss`), `IdDispositivo`, `temperatura` y `humedad`.
