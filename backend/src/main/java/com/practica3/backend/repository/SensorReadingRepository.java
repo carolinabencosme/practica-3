@@ -8,5 +8,5 @@ public interface SensorReadingRepository extends JpaRepository<SensorReading, Lo
 
     List<SensorReading> findTop50ByOrderByReceivedAtDesc();
 
-    List<SensorReading> findTop50ByDeviceIdOrderByReceivedAtDesc(String deviceId);
+    List<SensorReading> findTop50ByDeviceIdOrderByReceivedAtDesc(Integer deviceId);
 }
