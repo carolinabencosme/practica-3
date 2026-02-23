@@ -11,10 +11,10 @@ services:
       ACTIVEMQ_ADMIN_PASSWORD: ${ACTIVEMQ_ADMIN_PASSWORD:-admin}
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8161 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
 
   postgres:
     image: postgres:16-alpine
@@ -32,8 +32,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 10s
+      retries: 20
+      start_period: 30s
 
   backend:
     build:
@@ -43,9 +43,9 @@ services:
     restart: unless-stopped
     depends_on:
       activemq:
-        condition: service_healthy
+        condition: service_started
       postgres:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     environment:
@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
     depends_on:
       activemq:
-        condition: service_healthy
+        condition: service_started
     environment:
       DEVICE_ID: simulator-1
       BROKER_URL: tcp://activemq:61616
@@ -82,7 +82,7 @@ services:
     restart: unless-stopped
     depends_on:
       activemq:
-        condition: service_healthy
+        condition: service_started
     environment:
       DEVICE_ID: simulator-2
       BROKER_URL: tcp://activemq:61616
