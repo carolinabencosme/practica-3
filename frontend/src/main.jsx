@@ -161,22 +161,7 @@ function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  React.useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const [windowStates, setWindowStates] = React.useState({
-    command: defaultWindowState(),
-    kpi: defaultWindowState()
-  });
-
   const [windowOrder, setWindowOrder] = React.useState(['command', 'kpi']);
-
-  React.useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   React.useEffect(() => {
     let active = true;
