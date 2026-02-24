@@ -81,6 +81,12 @@ Variables de entorno soportadas:
 - `BROKER_USER`
 - `BROKER_PASSWORD`
 - `DESTINATION` (default: `notificacion_sensores`)
-- `PUBLISH_INTERVAL_SECONDS`
+- `PUBLISH_INTERVAL_SECONDS` (default en `docker-compose.yml`: `60`, es decir, una publicación cada 60 segundos)
+
+Para una demo rápida en clase (más puntos en las gráficas), puedes sobrescribir el intervalo en tu `.env`, por ejemplo:
+
+```bash
+PUBLISH_INTERVAL_SECONDS=5
+```
 
 Cada publicación incluye JSON con los campos `fechaGeneración` (`DD/MM/YYYY HH:mm:ss`), `IdDispositivo`, `temperatura` y `humedad`.
