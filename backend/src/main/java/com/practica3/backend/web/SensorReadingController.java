@@ -27,7 +27,7 @@ public class SensorReadingController {
     }
 
     @GetMapping("/by-device/{deviceId}")
-    public List<SensorReadingResponse> getByDevice(@PathVariable String deviceId) {
+    public List<SensorReadingResponse> getByDevice(@PathVariable Integer deviceId) {
         return sensorReadingService.getByDevice(deviceId)
                 .stream()
                 .map(SensorReadingResponse::fromEntity)

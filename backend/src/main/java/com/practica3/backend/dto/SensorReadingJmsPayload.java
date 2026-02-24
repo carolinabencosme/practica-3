@@ -12,9 +12,9 @@ public class SensorReadingJmsPayload {
     @JsonProperty("fechaGeneración")
     private String fechaGeneracion;
 
-    @NotBlank
+    @NotNull
     @JsonProperty("IdDispositivo")
-    private String idDispositivo;
+    private Integer idDispositivo;
 
     @NotNull
     @Min(-80)
@@ -36,11 +36,11 @@ public class SensorReadingJmsPayload {
         this.fechaGeneracion = fechaGeneracion;
     }
 
-    public String getIdDispositivo() {
+    public Integer getIdDispositivo() {
         return idDispositivo;
     }
 
-    public void setIdDispositivo(String idDispositivo) {
+    public void setIdDispositivo(Integer idDispositivo) {
         this.idDispositivo = idDispositivo;
     }
 

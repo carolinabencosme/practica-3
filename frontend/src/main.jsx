@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client/dist/sockjs';
+import { motion } from 'framer-motion';
 import {
   LineChart,
   CartesianGrid,
@@ -39,8 +40,10 @@ function toNumber(value) {
 }
 
 function normalizeReading(raw = {}) {
+  const deviceId = toDeviceId(raw);
+
   return {
-    deviceId: toDeviceId(raw),
+    deviceId,
     timestamp: toTimestamp(raw),
     temperatura: toNumber(raw.temperatura ?? raw.temperature),
     humedad: toNumber(raw.humedad ?? raw.humidity)
@@ -48,6 +51,10 @@ function normalizeReading(raw = {}) {
 }
 
 function addReading(state, reading) {
+  if (reading.deviceId == null) {
+    return state;
+  }
+
   const current = state[reading.deviceId] || [];
   const updated = [...current, reading].slice(-MAX_POINTS);
   return {
@@ -144,6 +151,20 @@ function Dashboard() {
     lastReading: null,
     error: null
   });
+  const [windowStates, setWindowStates] = React.useState({
+    command: defaultWindowState(),
+    kpi: defaultWindowState()
+  });
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [windowStates, setWindowStates] = React.useState({
     command: defaultWindowState(),

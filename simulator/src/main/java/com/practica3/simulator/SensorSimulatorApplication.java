@@ -71,7 +71,7 @@ public final class SensorSimulatorApplication {
         }
     }
 
-    private static String buildPayload(String deviceId, Random random) throws Exception {
+    private static String buildPayload(Integer deviceId, Random random) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("fechaGeneración", LocalDateTime.now().format(DATE_FORMATTER));
         payload.put("IdDispositivo", deviceId);
@@ -86,7 +86,7 @@ public final class SensorSimulatorApplication {
     }
 
     private record AppConfig(
-            String deviceId,
+            Integer deviceId,
             String brokerUrl,
             String brokerUser,
             String brokerPassword,
@@ -94,7 +94,7 @@ public final class SensorSimulatorApplication {
             int intervalSeconds
     ) {
         static AppConfig load() {
-            String deviceId = env("DEVICE_ID", "simulator-device");
+            Integer deviceId = Integer.parseInt(env("DEVICE_ID", "1"));
             String brokerUrl = env("BROKER_URL", "tcp://activemq:61616");
             String brokerUser = env("BROKER_USER", "admin");
             String brokerPassword = env("BROKER_PASSWORD", "admin");
