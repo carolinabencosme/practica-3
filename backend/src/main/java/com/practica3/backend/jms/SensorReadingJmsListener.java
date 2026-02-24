@@ -1,5 +1,6 @@
 package com.practica3.backend.jms;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.practica3.backend.domain.SensorReading;
 import com.practica3.backend.dto.SensorReadingJmsPayload;
 import com.practica3.backend.dto.SensorReadingResponse;
@@ -8,6 +9,9 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,25 +25,31 @@ import org.springframework.stereotype.Component;
 public class SensorReadingJmsListener {
 
     private static final Logger log = LoggerFactory.getLogger(SensorReadingJmsListener.class);
+    private static final DateTimeFormatter ENDPOINT_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     private final Validator validator;
     private final SensorReadingService sensorReadingService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final ObjectMapper objectMapper;
 
     public SensorReadingJmsListener(
             Validator validator,
             SensorReadingService sensorReadingService,
-            SimpMessagingTemplate messagingTemplate
+            SimpMessagingTemplate messagingTemplate,
+            ObjectMapper objectMapper
     ) {
         this.validator = validator;
         this.sensorReadingService = sensorReadingService;
         this.messagingTemplate = messagingTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @JmsListener(destination = "notificacion_sensores")
-    public void consume(SensorReadingJmsPayload payload) {
+    public void consume(String rawMessage) {
         try {
+            SensorReadingJmsPayload payload = objectMapper.readValue(rawMessage, SensorReadingJmsPayload.class);
             validatePayload(payload);
+
             SensorReading saved = sensorReadingService.save(toEntity(payload));
             SensorReadingResponse response = SensorReadingResponse.fromEntity(saved);
             messagingTemplate.convertAndSend("/topic/readings", response);
@@ -53,15 +63,10 @@ public class SensorReadingJmsListener {
                     response.humidity()
             );
         } catch (ConstraintViolationException | DateTimeParseException ex) {
-            log.warn(
-                    "event=jms_reading_rejected reason={} payloadDevice={} payloadDate={}",
-                    ex.getMessage(),
-                    payload != null ? payload.getIdDispositivo() : "null",
-                    payload != null ? payload.getFechaGeneracion() : "null"
-            );
+            log.warn("event=jms_reading_rejected reason={} payload={}", ex.getMessage(), rawMessage);
         } catch (Exception ex) {
-            log.error("event=jms_reading_failed message={}", ex.getMessage(), ex);
-            throw ex;
+            log.error("event=jms_reading_failed message={} payload={}", ex.getMessage(), rawMessage, ex);
+            throw new IllegalArgumentException("Unable to process JMS payload", ex);
         }
     }
 
@@ -81,11 +86,20 @@ public class SensorReadingJmsListener {
 
     private SensorReading toEntity(SensorReadingJmsPayload payload) {
         SensorReading reading = new SensorReading();
-        reading.setGeneratedAt(Instant.parse(payload.getFechaGeneracion()));
+        reading.setGeneratedAt(parseGeneratedAt(payload.getFechaGeneracion()));
         reading.setDeviceId(payload.getIdDispositivo());
         reading.setTemperature(payload.getTemperatura());
         reading.setHumidity(payload.getHumedad());
         reading.setReceivedAt(Instant.now());
         return reading;
+    }
+
+    private Instant parseGeneratedAt(String generatedAtValue) {
+        try {
+            return Instant.parse(generatedAtValue);
+        } catch (DateTimeParseException ex) {
+            LocalDateTime parsed = LocalDateTime.parse(generatedAtValue, ENDPOINT_DATE_FORMATTER);
+            return parsed.atZone(ZoneId.systemDefault()).toInstant();
+        }
     }
 }
