@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client/dist/sockjs';
+import { motion } from 'framer-motion';
 import {
   LineChart,
   CartesianGrid,
@@ -87,14 +88,47 @@ function parseWsMessage(message) {
   }
 }
 
+function formatStatusLabel(connected) {
+  return connected ? 'conectado' : 'desconectado';
+}
+
+function formatRelativeTime(timestamp, nowMs) {
+  if (!timestamp) {
+    return 'sin actividad reciente';
+  }
+
+  const diffMs = Math.max(0, nowMs - new Date(timestamp).getTime());
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 5) {
+    return 'justo ahora';
+  }
+  if (seconds < 60) {
+    return `hace ${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `hace ${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  return `hace ${hours} h`;
+}
+
 function Dashboard() {
   const [readingsByDevice, setReadingsByDevice] = React.useState({});
+  const [nowMs, setNowMs] = React.useState(Date.now());
   const [status, setStatus] = React.useState({
     backendConnected: false,
     websocketConnected: false,
     lastReading: null,
     error: null
   });
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   React.useEffect(() => {
     let active = true;
@@ -201,66 +235,154 @@ function Dashboard() {
   }, []);
 
   const deviceIds = Object.keys(readingsByDevice).sort();
+  const allReadings = Object.values(readingsByDevice).flat();
+  const totalPoints = allReadings.length;
+  const avgTemperature = totalPoints
+    ? (allReadings.reduce((acc, item) => acc + (item.temperatura ?? 0), 0) / totalPoints).toFixed(2)
+    : null;
+  const avgHumidity = totalPoints
+    ? (allReadings.reduce((acc, item) => acc + (item.humedad ?? 0), 0) / totalPoints).toFixed(2)
+    : null;
+  const lastRelative = formatRelativeTime(status.lastReading?.timestamp, nowMs);
 
   return (
     <main className="app">
-      <header>
+      <div className="glow glow-top" />
+      <div className="glow glow-bottom" />
+
+      <header className="hero">
+        <p className="eyebrow">Telemetry Control Center</p>
         <h1>Dashboard de Telemetría</h1>
-        <p>Monitoreo en tiempo real por sensor</p>
+        <p className="hero-subtitle">Monitoreo en tiempo real por sensor • stack JMS + WebSocket + PostgreSQL</p>
       </header>
 
-      <section className="status-panel">
+      <motion.section
+        className="status-panel"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+      >
         <h2>Estado del sistema</h2>
-        <ul>
-          <li>Backend REST: {status.backendConnected ? '✅ conectado' : '❌ desconectado'}</li>
-          <li>Broker/WebSocket: {status.websocketConnected ? '✅ conectado' : '❌ desconectado'}</li>
-          <li>
-            Última lectura:{' '}
-            {status.lastReading
-              ? `${status.lastReading.deviceId} @ ${new Date(status.lastReading.timestamp).toLocaleString()}`
-              : 'Sin datos'}
-          </li>
-        </ul>
+        <div className="status-grid">
+          <div className="status-chip">
+            <span className={`dot ${status.backendConnected ? 'ok' : 'bad'}`} />
+            <strong>Backend REST</strong>
+            <span>{formatStatusLabel(status.backendConnected)}</span>
+          </div>
+          <div className="status-chip">
+            <span className={`dot ${status.websocketConnected ? 'ok' : 'bad'}`} />
+            <strong>Broker/WebSocket</strong>
+            <span>{formatStatusLabel(status.websocketConnected)}</span>
+          </div>
+          <div className="status-chip metric">
+            <strong>Sensores activos</strong>
+            <span>{deviceIds.length}</span>
+          </div>
+          <div className="status-chip metric">
+            <strong>Puntos en memoria</strong>
+            <span>{totalPoints}</span>
+          </div>
+        </div>
+
+        <div className="kpi-grid">
+          <motion.article className="kpi-card" whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+            <p>Promedio temperatura</p>
+            <h3>{avgTemperature !== null ? `${avgTemperature} °C` : '--'}</h3>
+          </motion.article>
+          <motion.article className="kpi-card" whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+            <p>Promedio humedad</p>
+            <h3>{avgHumidity !== null ? `${avgHumidity} %` : '--'}</h3>
+          </motion.article>
+          <motion.article className="kpi-card" whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+            <p>Última actualización</p>
+            <h3>{lastRelative}</h3>
+          </motion.article>
+        </div>
+
+        <p className="last-reading">
+          Última lectura:{' '}
+          {status.lastReading
+            ? `${status.lastReading.deviceId} @ ${new Date(status.lastReading.timestamp).toLocaleString()}`
+            : 'Sin datos'}
+        </p>
+
         {status.error && <p className="error">{status.error}</p>}
-      </section>
+      </motion.section>
 
-      {deviceIds.length === 0 && <p>No hay lecturas disponibles todavía.</p>}
+      {deviceIds.length === 0 && <p className="empty">No hay lecturas disponibles todavía.</p>}
 
-      {deviceIds.map((deviceId) => {
+      {deviceIds.map((deviceId, idx) => {
         const chartData = formatChartData(readingsByDevice[deviceId]);
 
         return (
-          <section className="device-card" key={deviceId}>
-            <h3>Sensor: {deviceId}</h3>
+          <motion.section
+            className="device-card"
+            key={deviceId}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: Math.min(idx * 0.08, 0.32), ease: 'easeOut' }}
+          >
+            <div className="device-header">
+              <h3>Sensor {deviceId}</h3>
+              <span>{chartData.length} puntos</span>
+            </div>
 
-            <div className="chart-block">
+            <motion.div className="chart-block" whileHover={{ scale: 1.005 }} transition={{ duration: 0.2 }}>
               <h4>Temperatura vs tiempo</h4>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="hora" />
-                  <YAxis unit="°C" />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(146, 165, 189, 0.22)" />
+                  <XAxis dataKey="hora" stroke="#8fa5be" />
+                  <YAxis unit="°C" stroke="#8fa5be" />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(30, 39, 46, 0.96)',
+                      border: '1px solid rgba(0, 206, 201, 0.35)',
+                      color: '#f5f6fa'
+                    }}
+                  />
                   <Legend />
-                  <Line type="monotone" dataKey="temperatura" stroke="#ef4444" dot={false} name="Temperatura" />
+                  <Line
+                    type="monotone"
+                    dataKey="temperatura"
+                    stroke="#00cec9"
+                    strokeWidth={2.5}
+                    activeDot={{ r: 5 }}
+                    dot={chartData.length < 2}
+                    name="Temperatura"
+                  />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
+            </motion.div>
 
-            <div className="chart-block">
+            <motion.div className="chart-block" whileHover={{ scale: 1.005 }} transition={{ duration: 0.2 }}>
               <h4>Humedad vs tiempo</h4>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="hora" />
-                  <YAxis unit="%" />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(146, 165, 189, 0.22)" />
+                  <XAxis dataKey="hora" stroke="#8fa5be" />
+                  <YAxis unit="%" stroke="#8fa5be" />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(30, 39, 46, 0.96)',
+                      border: '1px solid rgba(9, 132, 227, 0.35)',
+                      color: '#f5f6fa'
+                    }}
+                  />
                   <Legend />
-                  <Line type="monotone" dataKey="humedad" stroke="#3b82f6" dot={false} name="Humedad" />
+                  <Line
+                    type="monotone"
+                    dataKey="humedad"
+                    stroke="#0984e3"
+                    strokeWidth={2.5}
+                    activeDot={{ r: 5 }}
+                    dot={chartData.length < 2}
+                    name="Humedad"
+                  />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
-          </section>
+            </motion.div>
+          </motion.section>
         );
       })}
     </main>

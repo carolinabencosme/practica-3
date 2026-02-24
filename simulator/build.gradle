@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.practica3'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.apache.activemq:activemq-client:6.1.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+}
+
+application {
+    mainClass = 'com.practica3.simulator.SensorSimulatorApplication'
+}
+
+tasks.named('shadowJar') {
+    archiveBaseName.set('simulator')
+    archiveClassifier.set('')
+    archiveVersion.set('')
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('shadowJar')
+}

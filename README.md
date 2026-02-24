@@ -20,6 +20,14 @@ Servicios orquestados en `docker-compose.yml`:
 5. `simulator-2`: simulador de sensores #2.
 6. `frontend`: dashboard web.
 
+
+## Build tools
+
+Los módulos Java usan **Gradle**:
+
+- `backend/`: Spring Boot con `build.gradle`.
+- `simulator/`: app Java con `build.gradle` y `shadowJar` para generar artefacto ejecutable.
+
 ## Prerrequisitos
 
 - Docker
