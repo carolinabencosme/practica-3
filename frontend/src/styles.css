@@ -23,13 +23,13 @@ body {
 }
 
 .app {
-  max-width: 1440px;
+  max-width: 1540px;
   margin: 0 auto;
-  padding: 2rem 1.2rem 4.3rem;
+  padding: 2rem 1.2rem 4.8rem;
 }
 
 .hero {
-  margin-bottom: 1.2rem;
+  margin-bottom: 0.9rem;
 }
 
 .eyebrow {
@@ -47,10 +47,65 @@ body {
   line-height: 1.04;
 }
 
+.workspace-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.toolbar-badge {
+  border: 1px solid rgba(143, 165, 190, 0.28);
+  border-radius: 10px;
+  padding: 0.34rem 0.72rem;
+  color: #9db8d3;
+  font-size: 0.84rem;
+  background: rgba(7, 14, 22, 0.64);
+}
+
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(143, 165, 190, 0.28);
+  border-radius: 12px;
+  padding: 0.28rem;
+  background: rgba(7, 14, 22, 0.64);
+}
+
+.zoom-controls span {
+  min-width: 58px;
+  text-align: center;
+  color: #d4e1f1;
+  font-size: 0.85rem;
+}
+
+.zoom-controls button {
+  border: 1px solid rgba(143, 165, 190, 0.35);
+  background: rgba(10, 21, 32, 0.88);
+  color: #e7f0fb;
+  border-radius: 8px;
+  padding: 0.2rem 0.56rem;
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+
+.zoom-controls button:hover {
+  border-color: rgba(0, 206, 201, 0.62);
+}
+
+.workspace-viewport {
+  border-radius: 14px;
+  overflow: auto;
+}
+
 .workspace {
+  transform-origin: top center;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
+  transition: transform 0.2s ease;
 }
 
 .window {
@@ -79,12 +134,9 @@ body {
   border-top: 2px solid rgba(9, 132, 227, 0.55);
 }
 
-.window.maximized {
+.window.expanded {
   grid-column: 1 / -1 !important;
-}
-
-.window.minimized .window-head {
-  border-bottom: 0;
+  min-height: 420px;
 }
 
 .window-head {
@@ -94,6 +146,12 @@ body {
   padding: 0.72rem 0.85rem;
   border-bottom: 1px solid rgba(143, 165, 190, 0.2);
   background: rgba(8, 15, 24, 0.6);
+  cursor: grab;
+  user-select: none;
+}
+
+.window-head:active {
+  cursor: grabbing;
 }
 
 .window-head h3 {
@@ -103,44 +161,56 @@ body {
   color: #dce8f7;
 }
 
-.window-dots {
+.window-mac-controls {
   display: inline-flex;
-  gap: 0.32rem;
+  gap: 0.42rem;
 }
 
-.window-dots span {
-  width: 9px;
-  height: 9px;
+.mac-btn {
+  width: 14px;
+  height: 14px;
+  border: 0;
   border-radius: 50%;
-  background: rgba(245, 246, 250, 0.24);
-}
-
-.window-actions {
-  margin-left: auto;
-  display: inline-flex;
-  gap: 0.4rem;
-}
-
-.win-btn {
-  width: 26px;
-  height: 22px;
-  border: 1px solid rgba(143, 165, 190, 0.26);
-  border-radius: 7px;
-  background: rgba(7, 15, 23, 0.62);
-  color: #d8e3ef;
-  font-size: 0.92rem;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  line-height: 1;
+  padding: 0;
 }
 
-.win-btn:hover {
-  border-color: rgba(0, 206, 201, 0.55);
-  color: #ffffff;
+.mac-btn span {
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  transform: translateY(-0.2px);
 }
 
-.win-btn.close:hover {
-  border-color: rgba(255, 114, 114, 0.7);
-  color: #ffb5b5;
+.window-head:hover .mac-btn span {
+  opacity: 0.82;
+}
+
+.mac-btn.close {
+  background: #ff5f57;
+}
+
+.mac-btn.min {
+  background: #febc2e;
+}
+
+.mac-btn.zoom {
+  background: #28c840;
+}
+
+.mac-btn.close span {
+  color: #5c0707;
+}
+
+.mac-btn.min span {
+  color: #634400;
+}
+
+.mac-btn.zoom span {
+  color: #074f13;
 }
 
 .window-body {
@@ -271,12 +341,30 @@ body {
 
 .dock-item {
   border: 1px solid rgba(143, 165, 190, 0.26);
-  border-radius: 9px;
-  background: rgba(12, 22, 34, 0.9);
+  border-radius: 999px;
+  background: rgba(12, 22, 34, 0.92);
   color: #e3edf8;
-  padding: 0.34rem 0.7rem;
+  padding: 0.34rem 0.82rem;
   font-size: 0.84rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dock-item.minimized {
+  border-color: rgba(254, 188, 46, 0.5);
+}
+
+.dock-item.closed {
+  border-color: rgba(255, 95, 87, 0.45);
+}
+
+.dock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(0, 206, 201, 0.92);
 }
 
 .dock-item:hover {
@@ -297,7 +385,12 @@ body {
 
 @media (max-width: 760px) {
   .app {
-    padding: 1.2rem 0.85rem 4.8rem;
+    padding: 1.2rem 0.85rem 5rem;
+  }
+
+  .workspace-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .status-grid,
