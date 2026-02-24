@@ -99,18 +99,52 @@ function formatRelativeTime(timestamp, nowMs) {
   return `hace ${Math.floor(minutes / 60)} h`;
 }
 
-function WindowFrame({ title, accent = 'cyan', children, className = '' }) {
+function defaultWindowState() {
+  return { closed: false, minimized: false, maximized: false };
+}
+
+function WindowFrame({
+  title,
+  accent = 'cyan',
+  children,
+  className = '',
+  state,
+  onClose,
+  onMinimize,
+  onMaximize
+}) {
+  const windowClass = [
+    'window',
+    accent,
+    className,
+    state?.minimized ? 'minimized' : '',
+    state?.maximized ? 'maximized' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <section className={`window ${accent} ${className}`}>
+    <section className={windowClass}>
       <header className="window-head">
-        <div className="window-dots">
+        <div className="window-dots" aria-hidden="true">
           <span />
           <span />
           <span />
         </div>
         <h3>{title}</h3>
+        <div className="window-actions">
+          <button type="button" className="win-btn" onClick={onMinimize} title="Minimizar">
+            −
+          </button>
+          <button type="button" className="win-btn" onClick={onMaximize} title="Expandir">
+            □
+          </button>
+          <button type="button" className="win-btn close" onClick={onClose} title="Cerrar">
+            ×
+          </button>
+        </div>
       </header>
-      <div className="window-body">{children}</div>
+      {!state?.minimized && <div className="window-body">{children}</div>}
     </section>
   );
 }
@@ -124,6 +158,15 @@ function Dashboard() {
     lastReading: null,
     error: null
   });
+  const [windowStates, setWindowStates] = React.useState({
+    command: defaultWindowState(),
+    kpi: defaultWindowState()
+  });
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   React.useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -222,6 +265,20 @@ function Dashboard() {
   }, []);
 
   const deviceIds = Object.keys(readingsByDevice).sort();
+
+  React.useEffect(() => {
+    setWindowStates((prev) => {
+      const next = { ...prev };
+      deviceIds.forEach((deviceId) => {
+        const key = `sensor-${deviceId}`;
+        if (!next[key]) {
+          next[key] = defaultWindowState();
+        }
+      });
+      return next;
+    });
+  }, [deviceIds]);
+
   const allReadings = Object.values(readingsByDevice).flat();
   const totalPoints = allReadings.length;
   const avgTemperature = totalPoints
@@ -231,6 +288,43 @@ function Dashboard() {
     ? (allReadings.reduce((acc, item) => acc + (item.humedad ?? 0), 0) / totalPoints).toFixed(2)
     : '--';
 
+  const windowMeta = React.useMemo(() => {
+    const base = {
+      command: 'Command Center',
+      kpi: 'Live KPIs'
+    };
+
+    deviceIds.forEach((deviceId) => {
+      base[`sensor-${deviceId}`] = `Sensor ${deviceId}`;
+    });
+
+    return base;
+  }, [deviceIds]);
+
+  const closedWindows = Object.entries(windowStates)
+    .filter(([, value]) => value?.closed)
+    .map(([id]) => ({ id, title: windowMeta[id] || id }));
+
+  const updateWindow = React.useCallback((id, updater) => {
+    setWindowStates((prev) => {
+      const current = prev[id] || defaultWindowState();
+      return {
+        ...prev,
+        [id]: updater(current)
+      };
+    });
+  }, []);
+
+  const closeWindow = (id) => updateWindow(id, (curr) => ({ ...curr, closed: true, minimized: false, maximized: false }));
+  const minimizeWindow = (id) =>
+    updateWindow(id, (curr) => ({ ...curr, minimized: !curr.minimized, closed: false, maximized: false }));
+  const maximizeWindow = (id) =>
+    updateWindow(id, (curr) => ({ ...curr, maximized: !curr.maximized, closed: false, minimized: false }));
+  const restoreWindow = (id) => updateWindow(id, (curr) => ({ ...curr, closed: false }));
+
+  const commandState = windowStates.command || defaultWindowState();
+  const kpiState = windowStates.kpi || defaultWindowState();
+
   return (
     <main className="app">
       <div className="hero">
@@ -239,56 +333,91 @@ function Dashboard() {
       </div>
 
       <div className="workspace">
-        <WindowFrame title="Command Center" accent="cyan" className="overview-window">
-          <div className="status-grid">
-            <article className="status-tile">
-              <p>Backend REST</p>
-              <strong>{status.backendConnected ? 'ONLINE' : 'OFFLINE'}</strong>
-            </article>
-            <article className="status-tile">
-              <p>WebSocket</p>
-              <strong>{status.websocketConnected ? 'ONLINE' : 'OFFLINE'}</strong>
-            </article>
-            <article className="status-tile">
-              <p>Sensores</p>
-              <strong>{deviceIds.length}</strong>
-            </article>
-            <article className="status-tile">
-              <p>Puntos</p>
-              <strong>{totalPoints}</strong>
-            </article>
-          </div>
-          {status.error && <p className="error">{status.error}</p>}
-        </WindowFrame>
+        {!commandState.closed && (
+          <WindowFrame
+            title="Command Center"
+            accent="cyan"
+            className="overview-window"
+            state={commandState}
+            onClose={() => closeWindow('command')}
+            onMinimize={() => minimizeWindow('command')}
+            onMaximize={() => maximizeWindow('command')}
+          >
+            <div className="status-grid">
+              <article className="status-tile">
+                <p>Backend REST</p>
+                <strong>{status.backendConnected ? 'ONLINE' : 'OFFLINE'}</strong>
+              </article>
+              <article className="status-tile">
+                <p>WebSocket</p>
+                <strong>{status.websocketConnected ? 'ONLINE' : 'OFFLINE'}</strong>
+              </article>
+              <article className="status-tile">
+                <p>Sensores</p>
+                <strong>{deviceIds.length}</strong>
+              </article>
+              <article className="status-tile">
+                <p>Puntos</p>
+                <strong>{totalPoints}</strong>
+              </article>
+            </div>
+            {status.error && <p className="error">{status.error}</p>}
+          </WindowFrame>
+        )}
 
-        <WindowFrame title="Live KPIs" accent="blue" className="kpi-window">
-          <div className="kpi-grid">
-            <article className="kpi-card">
-              <p>Promedio temperatura</p>
-              <h4>{avgTemperature} °C</h4>
-            </article>
-            <article className="kpi-card">
-              <p>Promedio humedad</p>
-              <h4>{avgHumidity} %</h4>
-            </article>
-            <article className="kpi-card">
-              <p>Última actualización</p>
-              <h4>{formatRelativeTime(status.lastReading?.timestamp, nowMs)}</h4>
-            </article>
-          </div>
-        </WindowFrame>
+        {!kpiState.closed && (
+          <WindowFrame
+            title="Live KPIs"
+            accent="blue"
+            className="kpi-window"
+            state={kpiState}
+            onClose={() => closeWindow('kpi')}
+            onMinimize={() => minimizeWindow('kpi')}
+            onMaximize={() => maximizeWindow('kpi')}
+          >
+            <div className="kpi-grid">
+              <article className="kpi-card">
+                <p>Promedio temperatura</p>
+                <h4>{avgTemperature} °C</h4>
+              </article>
+              <article className="kpi-card">
+                <p>Promedio humedad</p>
+                <h4>{avgHumidity} %</h4>
+              </article>
+              <article className="kpi-card">
+                <p>Última actualización</p>
+                <h4>{formatRelativeTime(status.lastReading?.timestamp, nowMs)}</h4>
+              </article>
+            </div>
+          </WindowFrame>
+        )}
 
         {deviceIds.length === 0 && (
-          <WindowFrame title="Sensor Feed" className="feed-window" accent="cyan">
+          <WindowFrame title="Sensor Feed" className="feed-window" accent="cyan" state={defaultWindowState()}>
             <p className="empty">No hay lecturas disponibles todavía.</p>
           </WindowFrame>
         )}
 
         {deviceIds.map((deviceId) => {
           const chartData = formatChartData(readingsByDevice[deviceId]);
+          const windowId = `sensor-${deviceId}`;
+          const windowState = windowStates[windowId] || defaultWindowState();
+
+          if (windowState.closed) {
+            return null;
+          }
 
           return (
-            <WindowFrame key={deviceId} title={`Sensor ${deviceId}`} className="feed-window" accent="cyan">
+            <WindowFrame
+              key={windowId}
+              title={`Sensor ${deviceId}`}
+              className="feed-window"
+              accent="cyan"
+              state={windowState}
+              onClose={() => closeWindow(windowId)}
+              onMinimize={() => minimizeWindow(windowId)}
+              onMaximize={() => maximizeWindow(windowId)}
+            >
               <div className="chart-block">
                 <h4>Temperatura vs tiempo</h4>
                 <ResponsiveContainer width="100%" height={260}>
@@ -348,6 +477,19 @@ function Dashboard() {
           );
         })}
       </div>
+
+      {closedWindows.length > 0 && (
+        <div className="dock">
+          <p>Dock</p>
+          <div className="dock-list">
+            {closedWindows.map((item) => (
+              <button key={item.id} type="button" className="dock-item" onClick={() => restoreWindow(item.id)}>
+                {item.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

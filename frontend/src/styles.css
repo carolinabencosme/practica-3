@@ -25,7 +25,7 @@ body {
 .app {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 2rem 1.2rem 3rem;
+  padding: 2rem 1.2rem 4.3rem;
 }
 
 .hero {
@@ -61,6 +61,14 @@ body {
     0 22px 45px rgba(1, 6, 12, 0.48),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.window:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 26px 54px rgba(1, 6, 12, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .window.cyan {
@@ -69,6 +77,14 @@ body {
 
 .window.blue {
   border-top: 2px solid rgba(9, 132, 227, 0.55);
+}
+
+.window.maximized {
+  grid-column: 1 / -1 !important;
+}
+
+.window.minimized .window-head {
+  border-bottom: 0;
 }
 
 .window-head {
@@ -97,6 +113,34 @@ body {
   height: 9px;
   border-radius: 50%;
   background: rgba(245, 246, 250, 0.24);
+}
+
+.window-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.win-btn {
+  width: 26px;
+  height: 22px;
+  border: 1px solid rgba(143, 165, 190, 0.26);
+  border-radius: 7px;
+  background: rgba(7, 15, 23, 0.62);
+  color: #d8e3ef;
+  font-size: 0.92rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.win-btn:hover {
+  border-color: rgba(0, 206, 201, 0.55);
+  color: #ffffff;
+}
+
+.win-btn.close:hover {
+  border-color: rgba(255, 114, 114, 0.7);
+  color: #ffb5b5;
 }
 
 .window-body {
@@ -199,6 +243,46 @@ body {
   fill: #b6c7da;
 }
 
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  background: rgba(6, 11, 16, 0.86);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(143, 165, 190, 0.25);
+  padding: 0.45rem 1rem 0.55rem;
+}
+
+.dock p {
+  margin: 0 0 0.35rem;
+  color: #88a0ba;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.dock-item {
+  border: 1px solid rgba(143, 165, 190, 0.26);
+  border-radius: 9px;
+  background: rgba(12, 22, 34, 0.9);
+  color: #e3edf8;
+  padding: 0.34rem 0.7rem;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.dock-item:hover {
+  border-color: rgba(0, 206, 201, 0.58);
+}
+
 @media (max-width: 1200px) {
   .overview-window,
   .kpi-window {
@@ -213,7 +297,7 @@ body {
 
 @media (max-width: 760px) {
   .app {
-    padding: 1.2rem 0.85rem 1.8rem;
+    padding: 1.2rem 0.85rem 4.8rem;
   }
 
   .status-grid,
