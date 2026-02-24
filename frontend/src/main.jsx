@@ -21,14 +21,7 @@ const restBase = import.meta.env.VITE_BACKEND_BASE_URL || '';
 const wsEndpoint = import.meta.env.VITE_WEBSOCKET_URL || '/ws';
 
 function toDeviceId(reading = {}) {
-  const raw =
-    reading.deviceId ??
-    reading.idDispositivo ??
-    reading.IdDispositivo ??
-    reading.deviceID;
-
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) ? parsed : null;
+  return reading.deviceId || reading.idDispositivo || reading.IdDispositivo || reading.deviceID || 'desconocido';
 }
 
 function toTimestamp(reading = {}) {
@@ -95,31 +88,31 @@ function parseWsMessage(message) {
   }
 }
 
-function formatStatusLabel(connected) {
-  return connected ? 'conectado' : 'desconectado';
-}
-
 function formatRelativeTime(timestamp, nowMs) {
-  if (!timestamp) {
-    return 'sin actividad reciente';
-  }
-
+  if (!timestamp) return 'sin actividad reciente';
   const diffMs = Math.max(0, nowMs - new Date(timestamp).getTime());
   const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 5) {
-    return 'justo ahora';
-  }
-  if (seconds < 60) {
-    return `hace ${seconds}s`;
-  }
-
+  if (seconds < 5) return 'justo ahora';
+  if (seconds < 60) return `hace ${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `hace ${minutes} min`;
-  }
+  if (minutes < 60) return `hace ${minutes} min`;
+  return `hace ${Math.floor(minutes / 60)} h`;
+}
 
-  const hours = Math.floor(minutes / 60);
-  return `hace ${hours} h`;
+function WindowFrame({ title, accent = 'cyan', children, className = '' }) {
+  return (
+    <section className={`window ${accent} ${className}`}>
+      <header className="window-head">
+        <div className="window-dots">
+          <span />
+          <span />
+          <span />
+        </div>
+        <h3>{title}</h3>
+      </header>
+      <div className="window-body">{children}</div>
+    </section>
+  );
 }
 
 function Dashboard() {
@@ -146,13 +139,9 @@ function Dashboard() {
         if (!response.ok) {
           throw new Error(`Error HTTP ${response.status}`);
         }
-
         const payload = await response.json();
         const normalized = (Array.isArray(payload) ? payload : []).map(normalizeReading);
-
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         setReadingsByDevice(() => {
           let nextState = {};
@@ -169,10 +158,7 @@ function Dashboard() {
           lastReading: normalized.at(-1) || prev.lastReading
         }));
       } catch (error) {
-        if (!active) {
-          return;
-        }
-
+        if (!active) return;
         setStatus((prev) => ({
           ...prev,
           backendConnected: false,
@@ -182,7 +168,6 @@ function Dashboard() {
     };
 
     loadInitialReadings();
-
     return () => {
       active = false;
     };
@@ -196,9 +181,7 @@ function Dashboard() {
         setStatus((prev) => ({ ...prev, websocketConnected: true, error: null }));
         client.subscribe('/topic/readings', (message) => {
           const readings = parseWsMessage(message);
-          if (!readings) {
-            return;
-          }
+          if (!readings) return;
 
           setReadingsByDevice((prev) => {
             let next = prev;
@@ -235,10 +218,7 @@ function Dashboard() {
     });
 
     client.activate();
-
-    return () => {
-      client.deactivate();
-    };
+    return () => client.deactivate();
   }, []);
 
   const deviceIds = Object.keys(readingsByDevice).sort();
@@ -246,152 +226,128 @@ function Dashboard() {
   const totalPoints = allReadings.length;
   const avgTemperature = totalPoints
     ? (allReadings.reduce((acc, item) => acc + (item.temperatura ?? 0), 0) / totalPoints).toFixed(2)
-    : null;
+    : '--';
   const avgHumidity = totalPoints
     ? (allReadings.reduce((acc, item) => acc + (item.humedad ?? 0), 0) / totalPoints).toFixed(2)
-    : null;
-  const lastRelative = formatRelativeTime(status.lastReading?.timestamp, nowMs);
+    : '--';
 
   return (
     <main className="app">
-      <div className="glow glow-top" />
-      <div className="glow glow-bottom" />
+      <div className="hero">
+        <p className="eyebrow">startup grade telemetry workspace</p>
+        <h1>Mission Control Dashboard</h1>
+      </div>
 
-      <header className="hero">
-        <p className="eyebrow">Telemetry Control Center</p>
-        <h1>Dashboard de Telemetría</h1>
-        <p className="hero-subtitle">Monitoreo en tiempo real por sensor • stack JMS + WebSocket + PostgreSQL</p>
-      </header>
-
-      <motion.section
-        className="status-panel"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: 'easeOut' }}
-      >
-        <h2>Estado del sistema</h2>
-        <div className="status-grid">
-          <div className="status-chip">
-            <span className={`dot ${status.backendConnected ? 'ok' : 'bad'}`} />
-            <strong>Backend REST</strong>
-            <span>{formatStatusLabel(status.backendConnected)}</span>
+      <div className="workspace">
+        <WindowFrame title="Command Center" accent="cyan" className="overview-window">
+          <div className="status-grid">
+            <article className="status-tile">
+              <p>Backend REST</p>
+              <strong>{status.backendConnected ? 'ONLINE' : 'OFFLINE'}</strong>
+            </article>
+            <article className="status-tile">
+              <p>WebSocket</p>
+              <strong>{status.websocketConnected ? 'ONLINE' : 'OFFLINE'}</strong>
+            </article>
+            <article className="status-tile">
+              <p>Sensores</p>
+              <strong>{deviceIds.length}</strong>
+            </article>
+            <article className="status-tile">
+              <p>Puntos</p>
+              <strong>{totalPoints}</strong>
+            </article>
           </div>
-          <div className="status-chip">
-            <span className={`dot ${status.websocketConnected ? 'ok' : 'bad'}`} />
-            <strong>Broker/WebSocket</strong>
-            <span>{formatStatusLabel(status.websocketConnected)}</span>
+          {status.error && <p className="error">{status.error}</p>}
+        </WindowFrame>
+
+        <WindowFrame title="Live KPIs" accent="blue" className="kpi-window">
+          <div className="kpi-grid">
+            <article className="kpi-card">
+              <p>Promedio temperatura</p>
+              <h4>{avgTemperature} °C</h4>
+            </article>
+            <article className="kpi-card">
+              <p>Promedio humedad</p>
+              <h4>{avgHumidity} %</h4>
+            </article>
+            <article className="kpi-card">
+              <p>Última actualización</p>
+              <h4>{formatRelativeTime(status.lastReading?.timestamp, nowMs)}</h4>
+            </article>
           </div>
-          <div className="status-chip metric">
-            <strong>Sensores activos</strong>
-            <span>{deviceIds.length}</span>
-          </div>
-          <div className="status-chip metric">
-            <strong>Puntos en memoria</strong>
-            <span>{totalPoints}</span>
-          </div>
-        </div>
+        </WindowFrame>
 
-        <div className="kpi-grid">
-          <motion.article className="kpi-card" whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
-            <p>Promedio temperatura</p>
-            <h3>{avgTemperature !== null ? `${avgTemperature} °C` : '--'}</h3>
-          </motion.article>
-          <motion.article className="kpi-card" whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
-            <p>Promedio humedad</p>
-            <h3>{avgHumidity !== null ? `${avgHumidity} %` : '--'}</h3>
-          </motion.article>
-          <motion.article className="kpi-card" whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
-            <p>Última actualización</p>
-            <h3>{lastRelative}</h3>
-          </motion.article>
-        </div>
+        {deviceIds.length === 0 && (
+          <WindowFrame title="Sensor Feed" className="feed-window" accent="cyan">
+            <p className="empty">No hay lecturas disponibles todavía.</p>
+          </WindowFrame>
+        )}
 
-        <p className="last-reading">
-          Última lectura:{' '}
-          {status.lastReading
-            ? `${status.lastReading.deviceId} @ ${new Date(status.lastReading.timestamp).toLocaleString()}`
-            : 'Sin datos'}
-        </p>
+        {deviceIds.map((deviceId) => {
+          const chartData = formatChartData(readingsByDevice[deviceId]);
 
-        {status.error && <p className="error">{status.error}</p>}
-      </motion.section>
+          return (
+            <WindowFrame key={deviceId} title={`Sensor ${deviceId}`} className="feed-window" accent="cyan">
+              <div className="chart-block">
+                <h4>Temperatura vs tiempo</h4>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(146, 165, 189, 0.22)" />
+                    <XAxis dataKey="hora" stroke="#8fa5be" />
+                    <YAxis unit="°C" stroke="#8fa5be" />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'rgba(30, 39, 46, 0.96)',
+                        border: '1px solid rgba(0, 206, 201, 0.35)',
+                        color: '#f5f6fa'
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="temperatura"
+                      stroke="#00cec9"
+                      strokeWidth={2.5}
+                      activeDot={{ r: 5 }}
+                      dot={chartData.length < 2}
+                      name="Temperatura"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
 
-      {deviceIds.length === 0 && <p className="empty">No hay lecturas disponibles todavía.</p>}
-
-      {deviceIds.map((deviceId, idx) => {
-        const chartData = formatChartData(readingsByDevice[deviceId]);
-
-        return (
-          <motion.section
-            className="device-card"
-            key={deviceId}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: Math.min(idx * 0.08, 0.32), ease: 'easeOut' }}
-          >
-            <div className="device-header">
-              <h3>Sensor {deviceId}</h3>
-              <span>{chartData.length} puntos</span>
-            </div>
-
-            <motion.div className="chart-block" whileHover={{ scale: 1.005 }} transition={{ duration: 0.2 }}>
-              <h4>Temperatura vs tiempo</h4>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(146, 165, 189, 0.22)" />
-                  <XAxis dataKey="hora" stroke="#8fa5be" />
-                  <YAxis unit="°C" stroke="#8fa5be" />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'rgba(30, 39, 46, 0.96)',
-                      border: '1px solid rgba(0, 206, 201, 0.35)',
-                      color: '#f5f6fa'
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="temperatura"
-                    stroke="#00cec9"
-                    strokeWidth={2.5}
-                    activeDot={{ r: 5 }}
-                    dot={chartData.length < 2}
-                    name="Temperatura"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </motion.div>
-
-            <motion.div className="chart-block" whileHover={{ scale: 1.005 }} transition={{ duration: 0.2 }}>
-              <h4>Humedad vs tiempo</h4>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(146, 165, 189, 0.22)" />
-                  <XAxis dataKey="hora" stroke="#8fa5be" />
-                  <YAxis unit="%" stroke="#8fa5be" />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'rgba(30, 39, 46, 0.96)',
-                      border: '1px solid rgba(9, 132, 227, 0.35)',
-                      color: '#f5f6fa'
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="humedad"
-                    stroke="#0984e3"
-                    strokeWidth={2.5}
-                    activeDot={{ r: 5 }}
-                    dot={chartData.length < 2}
-                    name="Humedad"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </motion.div>
-          </motion.section>
-        );
-      })}
+              <div className="chart-block">
+                <h4>Humedad vs tiempo</h4>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(146, 165, 189, 0.22)" />
+                    <XAxis dataKey="hora" stroke="#8fa5be" />
+                    <YAxis unit="%" stroke="#8fa5be" />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'rgba(30, 39, 46, 0.96)',
+                        border: '1px solid rgba(9, 132, 227, 0.35)',
+                        color: '#f5f6fa'
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="humedad"
+                      stroke="#0984e3"
+                      strokeWidth={2.5}
+                      activeDot={{ r: 5 }}
+                      dot={chartData.length < 2}
+                      name="Humedad"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </WindowFrame>
+          );
+        })}
+      </div>
     </main>
   );
 }
