@@ -142,6 +142,28 @@ function clampPan(nextPan, viewport, zoom) {
   };
 }
 
+function shouldBlockPanTarget(target) {
+  if (!(target instanceof Element)) return false;
+
+  return Boolean(
+    target.closest(
+      [
+        'button',
+        'a',
+        'input',
+        'textarea',
+        'select',
+        '[contenteditable="true"]',
+        '[data-no-pan="true"]',
+        '.recharts-wrapper',
+        '.recharts-responsive-container',
+        '.window',
+        '.dock'
+      ].join(',')
+    )
+  );
+}
+
 function WindowFrame({
   title,
   accent = 'cyan',
@@ -194,7 +216,9 @@ function Dashboard() {
 
   const panStartRef = React.useRef(null);
   const viewportRef = React.useRef(null);
+  const appRef = React.useRef(null);
   const spacePressedRef = React.useRef(false);
+  const activePanPointerRef = React.useRef(null);
 
   const [status, setStatus] = React.useState({
     backendConnected: false,
@@ -402,6 +426,81 @@ function Dashboard() {
     };
   }, [dragging, pan, zoom, windowLayouts]);
 
+  React.useEffect(() => {
+    const getPanBounds = () => {
+      const appRect = appRef.current?.getBoundingClientRect();
+      if (appRect) return appRect;
+      return {
+        width: window.innerWidth,
+        height: window.innerHeight
+      };
+    };
+
+    const onPointerDown = (event) => {
+      if (activePanPointerRef.current != null || dragging) return;
+      if (event.pointerType === 'mouse' && !(event.button === 0 || event.button === 1 || event.button === 2)) return;
+      if (shouldBlockPanTarget(event.target)) return;
+
+      const shouldStartPan =
+        event.button === 1 || event.button === 2 || spacePressedRef.current || event.button === 0;
+
+      if (!shouldStartPan) return;
+
+      event.preventDefault();
+      setIsPanning(true);
+      activePanPointerRef.current = event.pointerId;
+
+      if (event.target instanceof Element && event.target.setPointerCapture) {
+        event.target.setPointerCapture(event.pointerId);
+      }
+
+      panStartRef.current = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        panX: pan.x,
+        panY: pan.y
+      };
+    };
+
+    const onPointerMove = (event) => {
+      if (!panStartRef.current || activePanPointerRef.current !== event.pointerId) return;
+
+      const nextPan = {
+        x: panStartRef.current.panX + event.clientX - panStartRef.current.clientX,
+        y: panStartRef.current.panY + event.clientY - panStartRef.current.clientY
+      };
+
+      setPan(clampPan(nextPan, getPanBounds(), zoom));
+    };
+
+    const stopPan = (event) => {
+      if (activePanPointerRef.current !== event.pointerId) return;
+      if (event.target instanceof Element && event.target.releasePointerCapture) {
+        try {
+          event.target.releasePointerCapture(event.pointerId);
+        } catch (_) {
+          // no-op
+        }
+      }
+
+      activePanPointerRef.current = null;
+      panStartRef.current = null;
+      setIsPanning(false);
+    };
+
+    window.addEventListener('pointerdown', onPointerDown, { passive: false });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', stopPan, { passive: true });
+    window.addEventListener('pointercancel', stopPan, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', stopPan);
+      window.removeEventListener('pointercancel', stopPan);
+    };
+  }, [dragging, pan.x, pan.y, zoom]);
+
   const allReadings = Object.values(readingsByDevice).flat();
   const totalPoints = allReadings.length;
   const avgTemperature = totalPoints
@@ -466,36 +565,8 @@ function Dashboard() {
     setPan({ x: 0, y: 0 });
   };
 
-  const handleViewportMouseDown = (e) => {
-    if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressedRef.current)) {
-      e.preventDefault();
-      setIsPanning(true);
-      panStartRef.current = {
-        clientX: e.clientX,
-        clientY: e.clientY,
-        panX: pan.x,
-        panY: pan.y
-      };
-    }
-  };
-
-  const handleViewportMouseMove = (e) => {
-    if (!isPanning || !panStartRef.current) return;
-    const viewport = viewportRef.current?.getBoundingClientRect();
-    const nextPan = {
-      x: panStartRef.current.panX + e.clientX - panStartRef.current.clientX,
-      y: panStartRef.current.panY + e.clientY - panStartRef.current.clientY
-    };
-    setPan(clampPan(nextPan, viewport, zoom));
-  };
-
-  const handleViewportMouseUp = () => {
-    setIsPanning(false);
-    panStartRef.current = null;
-  };
-
   const handleViewportWheel = (e) => {
-    const viewport = viewportRef.current?.getBoundingClientRect();
+    const viewport = appRef.current?.getBoundingClientRect();
 
     if (!e.ctrlKey && !e.metaKey) {
       e.preventDefault();
@@ -659,15 +730,15 @@ function Dashboard() {
   };
 
   return (
-    <main className="app">
+    <main className={`app ${isPanning ? 'is-panning' : ''}`} ref={appRef}>
       <div className="page-grid-bg" aria-hidden="true" />
 
-      <div className="hero">
+      <div className="hero" data-no-pan="true">
         <p className="eyebrow">startup grade telemetry workspace</p>
         <h1>Mission Control Dashboard</h1>
       </div>
 
-      <div className="workspace-toolbar">
+      <div className="workspace-toolbar" data-no-pan="true">
         <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Arrastra la barra del dashboard para moverlo por grid.">
           Grid Fullscreen · estilo Startup YC
         </div>
@@ -684,10 +755,6 @@ function Dashboard() {
         ref={viewportRef}
         role="application"
         aria-label="Escritorio: arrastra con clic central/derecho o Espacio + arrastrar para mover. Rueda para navegar y Ctrl + rueda para zoom."
-        onMouseDown={handleViewportMouseDown}
-        onMouseMove={handleViewportMouseMove}
-        onMouseUp={handleViewportMouseUp}
-        onMouseLeave={handleViewportMouseUp}
         onContextMenu={(e) => e.preventDefault()}
         onWheel={handleViewportWheel}
         style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
@@ -701,7 +768,7 @@ function Dashboard() {
             transformOrigin: '0 0'
           }}
         >
-          <div className="desktop-apps" aria-label="Apps cerradas en escritorio">
+          <div className="desktop-apps" aria-label="Apps cerradas en escritorio" data-no-pan="true">
             {desktopAppIcons.map((item) => (
               <button key={item.id} type="button" className="desktop-app-icon" onClick={() => restoreWindow(item.id)}>
                 <span className="desktop-app-glyph">◻</span>
@@ -748,7 +815,7 @@ function Dashboard() {
       </div>
 
       {dockItems.length > 0 && (
-        <div className="dock">
+        <div className="dock" data-no-pan="true">
           <p>Apps minimizadas (clic para restaurar)</p>
           <div className="dock-list">
             {dockItems.map((item) => (
