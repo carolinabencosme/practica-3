@@ -10,22 +10,33 @@
 
 body {
   margin: 0;
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   color: #f7f9ff;
   background: linear-gradient(135deg, #060b14 0%, #0a1629 55%, #0d2a34 100%);
+  overflow: hidden;
 }
 
 #root {
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
 }
 
 .app {
   position: relative;
-  width: 100%;
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   margin: 0;
   padding: 1rem 1rem 4.6rem;
   overflow: hidden;
+  cursor: grab;
+}
+
+.app.is-panning {
+  cursor: grabbing;
 }
 
 .page-grid-bg {
@@ -124,7 +135,7 @@ body {
   position: relative;
   height: calc(100vh - 186px);
   min-height: 560px;
-  touch-action: none;
+  touch-action: pan-x pan-y;
   user-select: none;
   border: 1px solid rgba(130, 162, 206, 0.24);
   background: rgba(4, 8, 16, 0.35);
