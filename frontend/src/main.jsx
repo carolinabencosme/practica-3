@@ -427,8 +427,11 @@ function Dashboard() {
   }, [dragging, pan, zoom, windowLayouts]);
 
   React.useEffect(() => {
+    const panSurface = appRef.current;
+    if (!panSurface) return undefined;
+
     const getPanBounds = () => {
-      const appRect = appRef.current?.getBoundingClientRect();
+      const appRect = panSurface.getBoundingClientRect();
       if (appRect) return appRect;
       return {
         width: window.innerWidth,
@@ -450,8 +453,8 @@ function Dashboard() {
       setIsPanning(true);
       activePanPointerRef.current = event.pointerId;
 
-      if (event.target instanceof Element && event.target.setPointerCapture) {
-        event.target.setPointerCapture(event.pointerId);
+      if (panSurface.setPointerCapture) {
+        panSurface.setPointerCapture(event.pointerId);
       }
 
       panStartRef.current = {
@@ -475,9 +478,9 @@ function Dashboard() {
 
     const stopPan = (event) => {
       if (activePanPointerRef.current !== event.pointerId) return;
-      if (event.target instanceof Element && event.target.releasePointerCapture) {
+      if (panSurface.releasePointerCapture) {
         try {
-          event.target.releasePointerCapture(event.pointerId);
+          panSurface.releasePointerCapture(event.pointerId);
         } catch (_) {
           // no-op
         }
@@ -488,16 +491,16 @@ function Dashboard() {
       setIsPanning(false);
     };
 
-    window.addEventListener('pointerdown', onPointerDown, { passive: false });
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    window.addEventListener('pointerup', stopPan, { passive: true });
-    window.addEventListener('pointercancel', stopPan, { passive: true });
+    panSurface.addEventListener('pointerdown', onPointerDown, { passive: false });
+    panSurface.addEventListener('pointermove', onPointerMove, { passive: true });
+    panSurface.addEventListener('pointerup', stopPan, { passive: true });
+    panSurface.addEventListener('pointercancel', stopPan, { passive: true });
 
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', stopPan);
-      window.removeEventListener('pointercancel', stopPan);
+      panSurface.removeEventListener('pointerdown', onPointerDown);
+      panSurface.removeEventListener('pointermove', onPointerMove);
+      panSurface.removeEventListener('pointerup', stopPan);
+      panSurface.removeEventListener('pointercancel', stopPan);
     };
   }, [dragging, pan.x, pan.y, zoom]);
 
@@ -733,16 +736,16 @@ function Dashboard() {
     <main className={`app ${isPanning ? 'is-panning' : ''}`} ref={appRef}>
       <div className="page-grid-bg" aria-hidden="true" />
 
-      <div className="hero" data-no-pan="true">
+      <div className="hero">
         <p className="eyebrow">startup grade telemetry workspace</p>
         <h1>Mission Control Dashboard</h1>
       </div>
 
-      <div className="workspace-toolbar" data-no-pan="true">
+      <div className="workspace-toolbar">
         <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Arrastra la barra del dashboard para moverlo por grid.">
           Grid Fullscreen · estilo Startup YC
         </div>
-        <div className="zoom-controls">
+        <div className="zoom-controls" data-no-pan="true">
           <button type="button" onClick={zoomOut}>−</button>
           <span>{Math.round(zoom * 100)}%</span>
           <button type="button" onClick={zoomIn}>+</button>

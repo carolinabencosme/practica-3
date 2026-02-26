@@ -65,6 +65,13 @@ body {
   margin-bottom: 0.85rem;
 }
 
+.hero,
+.workspace-toolbar,
+.toolbar-badge {
+  cursor: inherit;
+}
+
+
 .eyebrow {
   margin: 0;
   color: #8cd9ff;
