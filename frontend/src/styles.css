@@ -97,15 +97,45 @@ body {
 
 .workspace-viewport {
   border-radius: 14px;
-  overflow: auto;
+  overflow: hidden;
+  position: relative;
+  height: 65vh;
+  min-height: 420px;
+  touch-action: none;
+  user-select: none;
+}
+
+.workspace-viewport:focus {
+  outline: none;
+}
+
+.workspace-desktop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background:
+    linear-gradient(rgba(143, 165, 190, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 165, 190, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-color: rgba(7, 14, 22, 0.5);
+  border-radius: 14px;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
 }
 
 .workspace {
-  transform-origin: top center;
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  transform-origin: 0 0;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
-  transition: transform 0.2s ease;
+  align-content: start;
+  max-width: calc(100% - 3rem);
+  max-height: calc(100% - 3rem);
 }
 
 .window {

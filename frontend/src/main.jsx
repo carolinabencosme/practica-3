@@ -16,6 +16,10 @@ import {
 import './styles.css';
 
 const MAX_POINTS = 60;
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 2;
+const DESKTOP_WIDTH = 3200;
+const DESKTOP_HEIGHT = 2400;
 const restBase = import.meta.env.VITE_BACKEND_BASE_URL || '';
 const wsEndpoint = import.meta.env.VITE_WEBSOCKET_URL || '/ws';
 
@@ -144,6 +148,10 @@ function Dashboard() {
   const [readingsByDevice, setReadingsByDevice] = React.useState({});
   const [nowMs, setNowMs] = React.useState(Date.now());
   const [zoom, setZoom] = React.useState(1);
+  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = React.useState(false);
+  const panStartRef = React.useRef(null);
+  const spacePressedRef = React.useRef(false);
   const [draggingId, setDraggingId] = React.useState(null);
   const [status, setStatus] = React.useState({
     backendConnected: false,
@@ -159,6 +167,28 @@ function Dashboard() {
   React.useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.code === 'Space') {
+        spacePressedRef.current = true;
+        e.preventDefault();
+      }
+    };
+    const onKeyUp = (e) => {
+      if (e.code === 'Space') {
+        spacePressedRef.current = false;
+        setIsPanning(false);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, []);
 
   const [windowOrder, setWindowOrder] = React.useState(['command', 'kpi']);
@@ -306,9 +336,42 @@ function Dashboard() {
     updateWindow(id, (curr) => ({ ...curr, mode: 'normal', expanded: !curr.expanded }));
   const restoreWindow = (id) => updateWindow(id, (curr) => ({ ...curr, mode: 'normal' }));
 
-  const zoomOut = () => setZoom((z) => Math.max(0.75, Number((z - 0.1).toFixed(2))));
-  const zoomIn = () => setZoom((z) => Math.min(1.45, Number((z + 0.1).toFixed(2))));
-  const resetZoom = () => setZoom(1);
+  const zoomOut = () => setZoom((z) => Math.max(MIN_ZOOM, Number((z - 0.1).toFixed(2))));
+  const zoomIn = () => setZoom((z) => Math.min(MAX_ZOOM, Number((z + 0.1).toFixed(2))));
+  const resetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleViewportMouseDown = (e) => {
+    if (e.button === 2 || (e.button === 0 && spacePressedRef.current)) {
+      e.preventDefault();
+      setIsPanning(true);
+      panStartRef.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        panX: pan.x,
+        panY: pan.y
+      };
+    }
+  };
+  const handleViewportMouseMove = (e) => {
+    if (!isPanning || !panStartRef.current) return;
+    setPan({
+      x: panStartRef.current.panX + e.clientX - panStartRef.current.clientX,
+      y: panStartRef.current.panY + e.clientY - panStartRef.current.clientY
+    });
+  };
+  const handleViewportMouseUp = () => {
+    setIsPanning(false);
+    panStartRef.current = null;
+  };
+  const handleViewportWheel = (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.08 : 0.08;
+    setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number((z + delta).toFixed(3)))));
+  };
 
   const dockItems = Object.entries(windowStates)
     .filter(([, state]) => state.mode !== 'normal')
@@ -452,7 +515,7 @@ function Dashboard() {
       </div>
 
       <div className="workspace-toolbar">
-        <div className="toolbar-badge">Window Grid</div>
+        <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Ctrl + rueda para zoom.">Escritorio</div>
         <div className="zoom-controls">
           <button type="button" onClick={zoomOut}>−</button>
           <span>{Math.round(zoom * 100)}%</span>
@@ -461,8 +524,28 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="workspace-viewport">
-        <div className="workspace" style={{ transform: `scale(${zoom})` }}>
+      <div
+        className="workspace-viewport"
+        role="application"
+        aria-label="Escritorio: arrastra con botón derecho o Mantén Espacio + arrastrar para mover. Ctrl + rueda para zoom."
+        onMouseDown={handleViewportMouseDown}
+        onMouseMove={handleViewportMouseMove}
+        onMouseUp={handleViewportMouseUp}
+        onMouseLeave={handleViewportMouseUp}
+        onContextMenu={(e) => e.preventDefault()}
+        onWheel={handleViewportWheel}
+        style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+      >
+        <div
+          className="workspace-desktop"
+          style={{
+            width: DESKTOP_WIDTH,
+            height: DESKTOP_HEIGHT,
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: '0 0'
+          }}
+        >
+          <div className="workspace">
           {windowOrder
             .filter((id) => (windowStates[id] || defaultWindowState()).mode === 'normal')
             .map((id) => {
@@ -501,12 +584,13 @@ function Dashboard() {
               <p className="empty">No hay lecturas disponibles todavía.</p>
             </WindowFrame>
           )}
+          </div>
         </div>
       </div>
 
       {dockItems.length > 0 && (
         <div className="dock">
-          <p>Dock</p>
+          <p>Apps (clic para restaurar)</p>
           <div className="dock-list">
             {dockItems.map((item) => (
               <button
