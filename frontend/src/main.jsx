@@ -22,6 +22,7 @@ const DESKTOP_HEIGHT = 2400;
 const GRID_SIZE = 24;
 const WINDOW_MIN_W = 380;
 const WINDOW_MIN_H = 220;
+const PAN_SAFE_MARGIN = 180;
 
 const restBase = import.meta.env.VITE_BACKEND_BASE_URL || '';
 const wsEndpoint = import.meta.env.VITE_WEBSOCKET_URL || '/ws';
@@ -124,6 +125,23 @@ function createDefaultLayout(id, index = 0) {
   return { x: 72, y: 390 + index * 630, w: 2290, h: 600 };
 }
 
+function clampPan(nextPan, viewport, zoom) {
+  if (!viewport) return nextPan;
+
+  const scaledWidth = DESKTOP_WIDTH * zoom;
+  const scaledHeight = DESKTOP_HEIGHT * zoom;
+
+  const minX = viewport.width - scaledWidth - PAN_SAFE_MARGIN;
+  const maxX = PAN_SAFE_MARGIN;
+  const minY = viewport.height - scaledHeight - PAN_SAFE_MARGIN;
+  const maxY = PAN_SAFE_MARGIN;
+
+  return {
+    x: Math.min(maxX, Math.max(minX, nextPan.x)),
+    y: Math.min(maxY, Math.max(minY, nextPan.y))
+  };
+}
+
 function WindowFrame({
   title,
   accent = 'cyan',
@@ -188,6 +206,22 @@ function Dashboard() {
     command: defaultWindowState(),
     kpi: defaultWindowState()
   });
+
+  React.useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    setPan((prev) => clampPan(prev, rect, zoom));
+  }, [zoom]);
+
+  React.useEffect(() => {
+    const onResize = () => {
+      const rect = viewportRef.current?.getBoundingClientRect();
+      setPan((prev) => clampPan(prev, rect, zoom));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [zoom]);
 
   React.useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -433,7 +467,7 @@ function Dashboard() {
   };
 
   const handleViewportMouseDown = (e) => {
-    if (e.button === 2 || (e.button === 0 && spacePressedRef.current)) {
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressedRef.current)) {
       e.preventDefault();
       setIsPanning(true);
       panStartRef.current = {
@@ -447,10 +481,12 @@ function Dashboard() {
 
   const handleViewportMouseMove = (e) => {
     if (!isPanning || !panStartRef.current) return;
-    setPan({
+    const viewport = viewportRef.current?.getBoundingClientRect();
+    const nextPan = {
       x: panStartRef.current.panX + e.clientX - panStartRef.current.clientX,
       y: panStartRef.current.panY + e.clientY - panStartRef.current.clientY
-    });
+    };
+    setPan(clampPan(nextPan, viewport, zoom));
   };
 
   const handleViewportMouseUp = () => {
@@ -459,7 +495,21 @@ function Dashboard() {
   };
 
   const handleViewportWheel = (e) => {
-    if (!e.ctrlKey && !e.metaKey) return;
+    const viewport = viewportRef.current?.getBoundingClientRect();
+
+    if (!e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      const speed = 1;
+      setPan((prev) => {
+        const nextPan = {
+          x: prev.x - e.deltaX * speed,
+          y: prev.y - e.deltaY * speed
+        };
+        return clampPan(nextPan, viewport, zoom);
+      });
+      return;
+    }
+
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
     setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number((z + delta).toFixed(3)))));
@@ -610,6 +660,8 @@ function Dashboard() {
 
   return (
     <main className="app">
+      <div className="page-grid-bg" aria-hidden="true" />
+
       <div className="hero">
         <p className="eyebrow">startup grade telemetry workspace</p>
         <h1>Mission Control Dashboard</h1>
@@ -617,7 +669,7 @@ function Dashboard() {
 
       <div className="workspace-toolbar">
         <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Arrastra la barra del dashboard para moverlo por grid.">
-          Escritorio con Grid
+          Grid Fullscreen · estilo Startup YC
         </div>
         <div className="zoom-controls">
           <button type="button" onClick={zoomOut}>−</button>
@@ -631,7 +683,7 @@ function Dashboard() {
         className="workspace-viewport"
         ref={viewportRef}
         role="application"
-        aria-label="Escritorio: arrastra con botón derecho o Mantén Espacio + arrastrar para mover. Ctrl + rueda para zoom."
+        aria-label="Escritorio: arrastra con clic central/derecho o Espacio + arrastrar para mover. Rueda para navegar y Ctrl + rueda para zoom."
         onMouseDown={handleViewportMouseDown}
         onMouseMove={handleViewportMouseMove}
         onMouseUp={handleViewportMouseUp}
