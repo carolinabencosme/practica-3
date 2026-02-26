@@ -2,7 +2,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client/dist/sockjs';
-import { motion } from 'framer-motion';
 import {
   LineChart,
   CartesianGrid,
@@ -20,6 +19,10 @@ const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 2;
 const DESKTOP_WIDTH = 3200;
 const DESKTOP_HEIGHT = 2400;
+const GRID_SIZE = 24;
+const WINDOW_MIN_W = 380;
+const WINDOW_MIN_H = 220;
+
 const restBase = import.meta.env.VITE_BACKEND_BASE_URL || '';
 const wsEndpoint = import.meta.env.VITE_WEBSOCKET_URL || '/ws';
 
@@ -101,31 +104,45 @@ function defaultWindowState() {
   return { mode: 'normal', expanded: false };
 }
 
+function snapToGrid(value) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
+function clampWindow(layout) {
+  return {
+    ...layout,
+    x: Math.min(Math.max(0, snapToGrid(layout.x)), DESKTOP_WIDTH - layout.w),
+    y: Math.min(Math.max(0, snapToGrid(layout.y)), DESKTOP_HEIGHT - layout.h),
+    w: Math.max(WINDOW_MIN_W, snapToGrid(layout.w)),
+    h: Math.max(WINDOW_MIN_H, snapToGrid(layout.h))
+  };
+}
+
+function createDefaultLayout(id, index = 0) {
+  if (id === 'command') return { x: 72, y: 72, w: 1380, h: 290 };
+  if (id === 'kpi') return { x: 1470, y: 72, w: 900, h: 290 };
+  return { x: 72, y: 390 + index * 630, w: 2290, h: 600 };
+}
+
 function WindowFrame({
   title,
   accent = 'cyan',
   children,
   className = '',
+  style,
   state,
   onClose,
   onMinimize,
   onExpand,
-  onDragStart,
-  onDragOver,
-  onDrop
+  onHeaderMouseDown
 }) {
-  const windowClass = [
-    'window',
-    accent,
-    className,
-    state.expanded ? 'expanded' : ''
-  ]
+  const windowClass = ['window', accent, className, state.expanded ? 'expanded' : '']
     .filter(Boolean)
     .join(' ');
 
   return (
-    <section className={windowClass} onDragOver={onDragOver} onDrop={onDrop}>
-      <header className="window-head" draggable onDragStart={onDragStart}>
+    <section className={windowClass} style={style}>
+      <header className="window-head" onMouseDown={onHeaderMouseDown}>
         <div className="window-mac-controls" role="group" aria-label={`Controles de ${title}`}>
           <button type="button" className="mac-btn close" onClick={onClose} title="Cerrar ventana">
             <span>×</span>
@@ -150,9 +167,17 @@ function Dashboard() {
   const [zoom, setZoom] = React.useState(1);
   const [pan, setPan] = React.useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = React.useState(false);
+  const [windowOrder, setWindowOrder] = React.useState(['command', 'kpi']);
+  const [windowLayouts, setWindowLayouts] = React.useState({
+    command: createDefaultLayout('command'),
+    kpi: createDefaultLayout('kpi')
+  });
+  const [dragging, setDragging] = React.useState(null);
+
   const panStartRef = React.useRef(null);
+  const viewportRef = React.useRef(null);
   const spacePressedRef = React.useRef(false);
-  const [draggingId, setDraggingId] = React.useState(null);
+
   const [status, setStatus] = React.useState({
     backendConnected: false,
     websocketConnected: false,
@@ -190,8 +215,6 @@ function Dashboard() {
       window.removeEventListener('keyup', onKeyUp);
     };
   }, []);
-
-  const [windowOrder, setWindowOrder] = React.useState(['command', 'kpi']);
 
   React.useEffect(() => {
     let active = true;
@@ -286,10 +309,19 @@ function Dashboard() {
 
   React.useEffect(() => {
     const sensorKeys = deviceIds.map((id) => `sensor-${id}`);
+
     setWindowStates((prev) => {
       const next = { ...prev };
       sensorKeys.forEach((key) => {
         if (!next[key]) next[key] = defaultWindowState();
+      });
+      return next;
+    });
+
+    setWindowLayouts((prev) => {
+      const next = { ...prev };
+      sensorKeys.forEach((key, index) => {
+        if (!next[key]) next[key] = createDefaultLayout(key, index);
       });
       return next;
     });
@@ -302,6 +334,39 @@ function Dashboard() {
       return merged.filter((id) => ['command', 'kpi', ...sensorKeys].includes(id));
     });
   }, [deviceIds]);
+
+  React.useEffect(() => {
+    if (!dragging) return undefined;
+
+    const onMouseMove = (event) => {
+      const viewportRect = viewportRef.current?.getBoundingClientRect();
+      if (!viewportRect) return;
+
+      const desktopX = (event.clientX - viewportRect.left - pan.x) / zoom;
+      const desktopY = (event.clientY - viewportRect.top - pan.y) / zoom;
+
+      const currentLayout = windowLayouts[dragging.id];
+      if (!currentLayout) return;
+
+      const next = clampWindow({
+        ...currentLayout,
+        x: desktopX - dragging.offsetX,
+        y: desktopY - dragging.offsetY
+      });
+
+      setWindowLayouts((prev) => ({ ...prev, [dragging.id]: next }));
+    };
+
+    const onMouseUp = () => setDragging(null);
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [dragging, pan, zoom, windowLayouts]);
 
   const allReadings = Object.values(readingsByDevice).flat();
   const totalPoints = allReadings.length;
@@ -336,6 +401,30 @@ function Dashboard() {
     updateWindow(id, (curr) => ({ ...curr, mode: 'normal', expanded: !curr.expanded }));
   const restoreWindow = (id) => updateWindow(id, (curr) => ({ ...curr, mode: 'normal' }));
 
+  const focusWindow = (id) => {
+    setWindowOrder((prev) => [...prev.filter((item) => item !== id), id]);
+  };
+
+  const startWindowDrag = (event, id) => {
+    if (event.button !== 0 || spacePressedRef.current) return;
+
+    event.preventDefault();
+    focusWindow(id);
+
+    const viewportRect = viewportRef.current?.getBoundingClientRect();
+    const layout = windowLayouts[id];
+    if (!viewportRect || !layout) return;
+
+    const desktopX = (event.clientX - viewportRect.left - pan.x) / zoom;
+    const desktopY = (event.clientY - viewportRect.top - pan.y) / zoom;
+
+    setDragging({
+      id,
+      offsetX: desktopX - layout.x,
+      offsetY: desktopY - layout.y
+    });
+  };
+
   const zoomOut = () => setZoom((z) => Math.max(MIN_ZOOM, Number((z - 0.1).toFixed(2))));
   const zoomIn = () => setZoom((z) => Math.min(MAX_ZOOM, Number((z + 0.1).toFixed(2))));
   const resetZoom = () => {
@@ -355,6 +444,7 @@ function Dashboard() {
       };
     }
   };
+
   const handleViewportMouseMove = (e) => {
     if (!isPanning || !panStartRef.current) return;
     setPan({
@@ -362,10 +452,12 @@ function Dashboard() {
       y: panStartRef.current.panY + e.clientY - panStartRef.current.clientY
     });
   };
+
   const handleViewportMouseUp = () => {
     setIsPanning(false);
     panStartRef.current = null;
   };
+
   const handleViewportWheel = (e) => {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
@@ -373,22 +465,13 @@ function Dashboard() {
     setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number((z + delta).toFixed(3)))));
   };
 
-  const dockItems = Object.entries(windowStates)
-    .filter(([, state]) => state.mode !== 'normal')
+  const desktopAppIcons = Object.entries(windowStates)
+    .filter(([, state]) => state.mode === 'closed')
     .map(([id, state]) => ({ id, state, title: windowMeta[id] || id }));
 
-  const moveWindow = (fromId, toId) => {
-    if (!fromId || !toId || fromId === toId) return;
-    setWindowOrder((prev) => {
-      const next = [...prev];
-      const fromIndex = next.indexOf(fromId);
-      const toIndex = next.indexOf(toId);
-      if (fromIndex < 0 || toIndex < 0) return prev;
-      next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, fromId);
-      return next;
-    });
-  };
+  const dockItems = Object.entries(windowStates)
+    .filter(([, state]) => state.mode === 'minimized')
+    .map(([id, state]) => ({ id, state, title: windowMeta[id] || id }));
 
   const renderWindowContent = (id) => {
     if (id === 'command') {
@@ -501,10 +584,28 @@ function Dashboard() {
   };
 
   const getWindowAccent = (id) => (id === 'kpi' ? 'blue' : 'cyan');
-  const getWindowClass = (id) => {
-    if (id === 'command') return 'overview-window';
-    if (id === 'kpi') return 'kpi-window';
-    return 'feed-window';
+
+  const windowStyle = (id) => {
+    const state = windowStates[id] || defaultWindowState();
+    const baseLayout = clampWindow(windowLayouts[id] || createDefaultLayout(id));
+
+    if (state.expanded) {
+      return {
+        left: GRID_SIZE,
+        top: GRID_SIZE,
+        width: DESKTOP_WIDTH - GRID_SIZE * 2,
+        height: DESKTOP_HEIGHT - GRID_SIZE * 2,
+        zIndex: 999
+      };
+    }
+
+    return {
+      left: baseLayout.x,
+      top: baseLayout.y,
+      width: baseLayout.w,
+      height: baseLayout.h,
+      zIndex: Math.max(1, windowOrder.indexOf(id) + 1)
+    };
   };
 
   return (
@@ -515,7 +616,9 @@ function Dashboard() {
       </div>
 
       <div className="workspace-toolbar">
-        <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Ctrl + rueda para zoom.">Escritorio</div>
+        <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Arrastra la barra del dashboard para moverlo por grid.">
+          Escritorio con Grid
+        </div>
         <div className="zoom-controls">
           <button type="button" onClick={zoomOut}>−</button>
           <span>{Math.round(zoom * 100)}%</span>
@@ -526,6 +629,7 @@ function Dashboard() {
 
       <div
         className="workspace-viewport"
+        ref={viewportRef}
         role="application"
         aria-label="Escritorio: arrastra con botón derecho o Mantén Espacio + arrastrar para mover. Ctrl + rueda para zoom."
         onMouseDown={handleViewportMouseDown}
@@ -545,7 +649,15 @@ function Dashboard() {
             transformOrigin: '0 0'
           }}
         >
-          <div className="workspace">
+          <div className="desktop-apps" aria-label="Apps cerradas en escritorio">
+            {desktopAppIcons.map((item) => (
+              <button key={item.id} type="button" className="desktop-app-icon" onClick={() => restoreWindow(item.id)}>
+                <span className="desktop-app-glyph">◻</span>
+                <span className="desktop-app-label">{item.title}</span>
+              </button>
+            ))}
+          </div>
+
           {windowOrder
             .filter((id) => (windowStates[id] || defaultWindowState()).mode === 'normal')
             .map((id) => {
@@ -557,17 +669,13 @@ function Dashboard() {
                   key={id}
                   title={title}
                   accent={getWindowAccent(id)}
-                  className={getWindowClass(id)}
+                  className={dragging?.id === id ? 'dragging' : ''}
+                  style={windowStyle(id)}
                   state={state}
                   onClose={() => closeWindow(id)}
                   onMinimize={() => minimizeWindow(id)}
                   onExpand={() => expandWindow(id)}
-                  onDragStart={() => setDraggingId(id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    moveWindow(draggingId, id);
-                    setDraggingId(null);
-                  }}
+                  onHeaderMouseDown={(event) => startWindowDrag(event, id)}
                 >
                   {renderWindowContent(id)}
                 </WindowFrame>
@@ -575,22 +683,21 @@ function Dashboard() {
             })}
 
           {deviceIds.length === 0 && (
-            <WindowFrame
-              title="Sensor Feed"
-              className="feed-window"
-              accent="cyan"
-              state={defaultWindowState()}
-            >
-              <p className="empty">No hay lecturas disponibles todavía.</p>
-            </WindowFrame>
+            <section className="window cyan empty-feed" style={{ left: 72, top: 390, width: 2290, zIndex: 2 }}>
+              <header className="window-head">
+                <h3>Sensor Feed</h3>
+              </header>
+              <div className="window-body">
+                <p className="empty">No hay lecturas disponibles todavía.</p>
+              </div>
+            </section>
           )}
-          </div>
         </div>
       </div>
 
       {dockItems.length > 0 && (
         <div className="dock">
-          <p>Apps (clic para restaurar)</p>
+          <p>Apps minimizadas (clic para restaurar)</p>
           <div className="dock-list">
             {dockItems.map((item) => (
               <button
