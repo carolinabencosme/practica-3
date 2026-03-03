@@ -13,7 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import org.apache.activemq.ActiveMQConnectionFactory;
-import org.apache.activemq.command.ActiveMQQueue;
+import org.apache.activemq.command.ActiveMQTopic;
 
 public final class SensorSimulatorApplication {
 
@@ -46,7 +46,7 @@ public final class SensorSimulatorApplication {
                     Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE)
             ) {
                 connection.start();
-                MessageProducer producer = session.createProducer(new ActiveMQQueue(config.destination()));
+                MessageProducer producer = session.createProducer(new ActiveMQTopic(config.destination()));
                 publishLoop(config, random, session, producer);
             } catch (JMSException ex) {
                 System.err.printf(Locale.ROOT, "event=simulator_connection_error message=%s%n", ex.getMessage());

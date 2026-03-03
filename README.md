@@ -72,7 +72,7 @@ En `docker-compose.yml` se inyectan las propiedades de Spring vía variables est
 
 ## Simulator
 
-`simulator/` contiene una app Java que publica telemetría JMS/OpenWire al destino `notificacion_sensores`.
+`simulator/` contiene una app Java que publica telemetría JMS/OpenWire al **Topic** `notificacion_sensores`.
 
 Variables de entorno soportadas:
 
@@ -80,7 +80,7 @@ Variables de entorno soportadas:
 - `BROKER_URL`
 - `BROKER_USER`
 - `BROKER_PASSWORD`
-- `DESTINATION` (default: `notificacion_sensores`)
+- `DESTINATION` (default: `notificacion_sensores`, corresponde al **Topic** compartido con backend/compose)
 - `PUBLISH_INTERVAL_SECONDS` (default en `docker-compose.yml`: `60`, es decir, una publicación cada 60 segundos)
 
 Para una demo rápida en clase (más puntos en las gráficas), puedes sobrescribir el intervalo en tu `.env`, por ejemplo:

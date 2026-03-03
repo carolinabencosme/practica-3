@@ -12,6 +12,7 @@ spring:
     user: ${SPRING_ACTIVEMQ_USER:${JMS_BROKER_USER:admin}}
     password: ${SPRING_ACTIVEMQ_PASSWORD:${JMS_BROKER_PASSWORD:admin}}
   jms:
+    pub-sub-domain: true
     listener:
       acknowledge-mode: auto
 
