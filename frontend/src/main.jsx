@@ -14,6 +14,53 @@ import {
 } from 'recharts';
 import './styles.css';
 
+function LandingPage({ onEnter }) {
+  return (
+    <div className="landing">
+      <div className="landing__grid" aria-hidden="true" />
+      <div className="landing__content">
+        <p className="landing__eyebrow">Telemetría en tiempo real</p>
+        <h1 className="landing__title">Mission Control Dashboard</h1>
+        <p className="landing__desc">
+          Visualiza sensores, KPIs y gráficas en vivo. Conectado por WebSocket y JMS a tu backend Spring.
+        </p>
+        <button type="button" className="landing__cta" onClick={onEnter}>
+          Entrar al dashboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = React.useState('landing');
+
+  return (
+    <div className="app-shell">
+      <nav className="main-tabs" aria-label="Navegación principal">
+        <button
+          type="button"
+          className={`main-tabs__tab ${tab === 'landing' ? 'main-tabs__tab--active' : ''}`}
+          onClick={() => setTab('landing')}
+        >
+          Inicio
+        </button>
+        <button
+          type="button"
+          className={`main-tabs__tab ${tab === 'dashboard' ? 'main-tabs__tab--active' : ''}`}
+          onClick={() => setTab('dashboard')}
+        >
+          Dashboard
+        </button>
+      </nav>
+      <div className="tab-content">
+        {tab === 'landing' && <LandingPage onEnter={() => setTab('dashboard')} />}
+        {tab === 'dashboard' && <Dashboard />}
+      </div>
+    </div>
+  );
+}
+
 const MAX_POINTS = 60;
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 2;
@@ -152,15 +199,23 @@ function WindowFrame({
   onClose,
   onMinimize,
   onExpand,
-  onHeaderMouseDown
+  onHeaderMouseDown,
+  onHeaderDoubleClick,
+  onResizeStart,
+  isResizing
 }) {
-  const windowClass = ['window', accent, className, state.expanded ? 'expanded' : '']
+  const windowClass = ['window', accent, className, state.expanded ? 'expanded' : '', isResizing ? 'resizing' : '']
     .filter(Boolean)
     .join(' ');
+  const showResizeHandles = !state.expanded && onResizeStart;
 
   return (
     <section className={windowClass} style={style}>
-      <header className="window-head" onMouseDown={onHeaderMouseDown}>
+      <header
+        className="window-head"
+        onMouseDown={onHeaderMouseDown}
+        onDoubleClick={onHeaderDoubleClick}
+      >
         <div className="window-mac-controls" role="group" aria-label={`Controles de ${title}`}>
           <button type="button" className="mac-btn close" onClick={onClose} title="Cerrar ventana">
             <span>×</span>
@@ -168,13 +223,20 @@ function WindowFrame({
           <button type="button" className="mac-btn min" onClick={onMinimize} title="Minimizar ventana">
             <span>−</span>
           </button>
-          <button type="button" className="mac-btn zoom" onClick={onExpand} title="Expandir ventana">
+          <button type="button" className="mac-btn zoom" onClick={onExpand} title="Expandir / restaurar ventana">
             <span>□</span>
           </button>
         </div>
         <h3>{title}</h3>
       </header>
       <div className="window-body">{children}</div>
+      {showResizeHandles && (
+        <>
+          <div className="window-resize window-resize--e" onMouseDown={(e) => { e.stopPropagation(); onResizeStart('e'); }} title="Redimensionar" />
+          <div className="window-resize window-resize--s" onMouseDown={(e) => { e.stopPropagation(); onResizeStart('s'); }} title="Redimensionar" />
+          <div className="window-resize window-resize--se" onMouseDown={(e) => { e.stopPropagation(); onResizeStart('se'); }} title="Redimensionar" />
+        </>
+      )}
     </section>
   );
 }
@@ -191,6 +253,7 @@ function Dashboard() {
     kpi: createDefaultLayout('kpi')
   });
   const [dragging, setDragging] = React.useState(null);
+  const [resizing, setResizing] = React.useState(null);
 
   const panStartRef = React.useRef(null);
   const viewportRef = React.useRef(null);
@@ -206,6 +269,7 @@ function Dashboard() {
     command: defaultWindowState(),
     kpi: defaultWindowState()
   });
+  const [showCommandsPalette, setShowCommandsPalette] = React.useState(false);
 
   React.useEffect(() => {
     const viewport = viewportRef.current;
@@ -234,6 +298,11 @@ function Dashboard() {
         spacePressedRef.current = true;
         e.preventDefault();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandsPalette((prev) => !prev);
+      }
+      if (e.key === 'Escape') setShowCommandsPalette(false);
     };
     const onKeyUp = (e) => {
       if (e.code === 'Space') {
@@ -402,6 +471,45 @@ function Dashboard() {
     };
   }, [dragging, pan, zoom, windowLayouts]);
 
+  React.useEffect(() => {
+    if (!resizing) return undefined;
+
+    const viewportRect = viewportRef.current?.getBoundingClientRect();
+    if (!viewportRect) return undefined;
+
+    const onMouseMove = (e) => {
+      const desktopX = (e.clientX - viewportRect.left - pan.x) / zoom;
+      const desktopY = (e.clientY - viewportRect.top - pan.y) / zoom;
+      const { id, edge, startLayout } = resizing;
+
+      setWindowLayouts((prev) => {
+        const current = prev[id] || startLayout;
+        let next = { ...current };
+
+        if (edge === 'e' || edge === 'se') {
+          const newW = desktopX - current.x;
+          if (newW >= WINDOW_MIN_W) next.w = snapToGrid(newW);
+        }
+        if (edge === 's' || edge === 'se') {
+          const newH = desktopY - current.y;
+          if (newH >= WINDOW_MIN_H) next.h = snapToGrid(newH);
+        }
+
+        return { ...prev, [id]: clampWindow(next) };
+      });
+    };
+
+    const onMouseUp = () => setResizing(null);
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [resizing, pan, zoom]);
+
   const allReadings = Object.values(readingsByDevice).flat();
   const totalPoints = allReadings.length;
   const avgTemperature = totalPoints
@@ -459,6 +567,13 @@ function Dashboard() {
     });
   };
 
+  const startResize = (id, edge) => {
+    const layout = windowLayouts[id];
+    if (!layout) return;
+    focusWindow(id);
+    setResizing({ id, edge, startLayout: { ...layout } });
+  };
+
   const zoomOut = () => setZoom((z) => Math.max(MIN_ZOOM, Number((z - 0.1).toFixed(2))));
   const zoomIn = () => setZoom((z) => Math.min(MAX_ZOOM, Number((z + 0.1).toFixed(2))));
   const resetZoom = () => {
@@ -495,32 +610,13 @@ function Dashboard() {
   };
 
   const handleViewportWheel = (e) => {
-    const viewport = viewportRef.current?.getBoundingClientRect();
-
-    if (!e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      const speed = 1;
-      setPan((prev) => {
-        const nextPan = {
-          x: prev.x - e.deltaX * speed,
-          y: prev.y - e.deltaY * speed
-        };
-        return clampPan(nextPan, viewport, zoom);
-      });
-      return;
-    }
-
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
     setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number((z + delta).toFixed(3)))));
   };
 
   const desktopAppIcons = Object.entries(windowStates)
-    .filter(([, state]) => state.mode === 'closed')
-    .map(([id, state]) => ({ id, state, title: windowMeta[id] || id }));
-
-  const dockItems = Object.entries(windowStates)
-    .filter(([, state]) => state.mode === 'minimized')
+    .filter(([, state]) => state.mode === 'closed' || state.mode === 'minimized')
     .map(([id, state]) => ({ id, state, title: windowMeta[id] || id }));
 
   const renderWindowContent = (id) => {
@@ -660,30 +756,19 @@ function Dashboard() {
 
   return (
     <main className="app">
-      <div className="page-grid-bg" aria-hidden="true" />
-
-      <div className="hero">
-        <p className="eyebrow">startup grade telemetry workspace</p>
-        <h1>Mission Control Dashboard</h1>
-      </div>
-
-      <div className="workspace-toolbar">
-        <div className="toolbar-badge" title="Mantén Espacio + arrastrar o clic derecho para mover. Arrastra la barra del dashboard para moverlo por grid.">
-          Grid Fullscreen · estilo Startup YC
-        </div>
-        <div className="zoom-controls">
-          <button type="button" onClick={zoomOut}>−</button>
-          <span>{Math.round(zoom * 100)}%</span>
-          <button type="button" onClick={zoomIn}>+</button>
-          <button type="button" onClick={resetZoom}>Reset</button>
-        </div>
-      </div>
-
+      <button
+        type="button"
+        className="dashboard-ctrl-hint"
+        onClick={() => setShowCommandsPalette(true)}
+        title="Abrir paleta de comandos"
+      >
+        <kbd>Ctrl</kbd>+<kbd>K</kbd> para abrir la paleta de comandos
+      </button>
       <div
         className="workspace-viewport"
         ref={viewportRef}
         role="application"
-        aria-label="Escritorio: arrastra con clic central/derecho o Espacio + arrastrar para mover. Rueda para navegar y Ctrl + rueda para zoom."
+        aria-label="Escritorio: rueda para zoom. Clic derecho o Espacio + arrastrar para mover. Ctrl+K ver comandos."
         onMouseDown={handleViewportMouseDown}
         onMouseMove={handleViewportMouseMove}
         onMouseUp={handleViewportMouseUp}
@@ -701,7 +786,7 @@ function Dashboard() {
             transformOrigin: '0 0'
           }}
         >
-          <div className="desktop-apps" aria-label="Apps cerradas en escritorio">
+          <div className="desktop-apps" aria-label="Apps cerradas o minimizadas, clic para restaurar">
             {desktopAppIcons.map((item) => (
               <button key={item.id} type="button" className="desktop-app-icon" onClick={() => restoreWindow(item.id)}>
                 <span className="desktop-app-glyph">◻</span>
@@ -728,6 +813,9 @@ function Dashboard() {
                   onMinimize={() => minimizeWindow(id)}
                   onExpand={() => expandWindow(id)}
                   onHeaderMouseDown={(event) => startWindowDrag(event, id)}
+                  onHeaderDoubleClick={() => expandWindow(id)}
+                  onResizeStart={(edge) => startResize(id, edge)}
+                  isResizing={resizing?.id === id}
                 >
                   {renderWindowContent(id)}
                 </WindowFrame>
@@ -747,21 +835,33 @@ function Dashboard() {
         </div>
       </div>
 
-      {dockItems.length > 0 && (
-        <div className="dock">
-          <p>Apps minimizadas (clic para restaurar)</p>
-          <div className="dock-list">
-            {dockItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`dock-item ${item.state.mode}`}
-                onClick={() => restoreWindow(item.id)}
-              >
-                <span className="dock-dot" />
-                {item.title}
-              </button>
-            ))}
+      {showCommandsPalette && (
+        <div
+          className="commands-palette-overlay"
+          role="dialog"
+          aria-label="Comandos"
+          onClick={() => setShowCommandsPalette(false)}
+        >
+          <div className="commands-palette" onClick={(e) => e.stopPropagation()}>
+            <div className="commands-palette-header">
+              <h2>Comandos</h2>
+              <span className="commands-palette-hint">Ctrl+K para cerrar</span>
+            </div>
+            <ul className="commands-list">
+              <li><kbd>Rueda</kbd> Zoom in / Zoom out</li>
+              <li><kbd>Ctrl</kbd> + <kbd>K</kbd> Abrir / cerrar esta paleta</li>
+              <li><kbd>Espacio</kbd> + arrastrar Mover el lienzo (pan)</li>
+              <li><kbd>Clic derecho</kbd> + arrastrar Mover el lienzo (pan)</li>
+              <li><kbd>Clic central</kbd> + arrastrar Mover el lienzo (pan)</li>
+              <li><kbd>Esc</kbd> Cerrar paleta de comandos</li>
+              <li>Arrastrar barra de una ventana Mover ventana en el escritorio</li>
+              <li>Doble clic en la barra Expandir ventana a pantalla completa / restaurar</li>
+              <li>Arrastrar borde derecho o inferior Redimensionar ventana</li>
+              <li>Botón rojo en ventana Cerrar (va al escritorio como icono)</li>
+              <li>Botón amarillo en ventana Minimizar (icono en escritorio)</li>
+              <li>Botón verde en ventana Expandir / restaurar ventana</li>
+              <li>Clic en icono del escritorio Restaurar ventana cerrada o minimizada</li>
+            </ul>
           </div>
         </div>
       )}
@@ -771,6 +871,6 @@ function Dashboard() {
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <Dashboard />
+    <App />
   </React.StrictMode>
 );
